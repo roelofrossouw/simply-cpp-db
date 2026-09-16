@@ -42,34 +42,12 @@ add_sc_object(postgres LINK_LIBRARIES PostgreSQL::PostgreSQL PUBLIC_LINK_LIBRARI
 ######################
 # Exported Libraries #
 ######################
-
-# Static
-project(sc-db VERSION ${SC_VERSION} DESCRIPTION "simply-cpp-db consolidated static library")
-add_library(${PROJECT_NAME} STATIC ${SOURCE_OBJECTS})
-add_library(sc::sc-db ALIAS ${PROJECT_NAME})
-set_target_properties(${PROJECT_NAME} PROPERTIES VERSION ${PROJECT_VERSION} SOVERSION ${PROJECT_VERSION_MAJOR})
-target_include_directories(${PROJECT_NAME} PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include> $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>)
-target_link_libraries(${PROJECT_NAME} PUBLIC ${SOURCE_LIBRARIES} ${SOURCE_LINK_LIBRARIES})
-list(APPEND SOURCE_LIBRARIES sc-db)
-
-# Shared
-project(sc-db-shared VERSION ${SC_VERSION} DESCRIPTION "simply-cpp-db common shared library")
-add_library(${PROJECT_NAME} SHARED ${SOURCE_OBJECTS})
-add_library(sc::sc-db-shared ALIAS ${PROJECT_NAME})
-set_target_properties(${PROJECT_NAME} PROPERTIES VERSION ${PROJECT_VERSION} SOVERSION ${PROJECT_VERSION_MAJOR})
-target_include_directories(${PROJECT_NAME} PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include> $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>)
-target_link_libraries(${PROJECT_NAME} PUBLIC ${SOURCE_LIBRARIES} ${SOURCE_LINK_LIBRARIES})
-list(APPEND SOURCE_LIBRARIES sc-db-shared)
+add_sc_libraries(sc-db DESCRIPTION "simply-cpp-db")
 
 ################
 # Installation #
 ################
-install(TARGETS ${SOURCE_LIBRARIES} EXPORT sc-dbTargets)
-install(DIRECTORY include/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
-install(EXPORT sc-dbTargets FILE sc-dbTargets.cmake NAMESPACE sc:: DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/sc-db)
-configure_package_config_file(cmake/sc-dbConfig.cmake.in ${CMAKE_CURRENT_BINARY_DIR}/sc-dbConfig.cmake INSTALL_DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/sc-db)
-write_basic_package_version_file(${CMAKE_CURRENT_BINARY_DIR}/sc-dbConfigVersion.cmake VERSION ${PROJECT_VERSION} COMPATIBILITY SameMajorVersion)
-install(FILES ${CMAKE_CURRENT_BINARY_DIR}/sc-dbConfig.cmake ${CMAKE_CURRENT_BINARY_DIR}/sc-dbConfigVersion.cmake DESTINATION lib/cmake/sc-db)
+install_sc_module(sc-db)
 
 #########
 # Tests #
