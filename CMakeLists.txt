@@ -26,8 +26,7 @@ message(STATUS "SimplyCPP ${SC_MODULE} Version: ${SC_VERSION}")
 # pg_config knows where a brew keg landed, find_package on its own does not. The same
 # hint is in cmake/sc-dbConfig.cmake.in for consumers of the installed package.
 if (APPLE AND NOT PostgreSQL_ROOT)
-    execute_process(COMMAND pg_config --libdir
-            OUTPUT_VARIABLE PostgreSQL_ROOT OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET)
+    execute_process(COMMAND pg_config --libdir OUTPUT_VARIABLE PostgreSQL_ROOT OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET)
 endif ()
 find_or_install_package(PostgreSQL postgresql-server-dev-all postgresql)
 

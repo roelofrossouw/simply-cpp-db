@@ -18,6 +18,17 @@
 # silently. sc_test.h is cached into tests/ the same way, where add_sc_test() already
 # looks for it.
 #
+# This file keeps itself in step too: it is cached from the same source as the helpers,
+# so a copy that has fallen behind is reported, and -DSC_UPDATE_HELPERS=ON replaces it
+# along with the rest. It is the only file a new module has to start with, and one line
+# puts it there:
+#
+#     curl -O --create-dirs --output-dir cmake \
+#         https://raw.githubusercontent.com/roelofrossouw/simply-cpp/main/cmake/sc_bootstrap.cmake
+#
+# or, on a machine with sc installed, copy it out of <prefix>/lib/cmake/sc/. After that
+# `include(cmake/sc_bootstrap.cmake)` is the whole of a module's setup.
+#
 # Point SC_HELPERS_REPOSITORY and SC_HELPERS_TAG somewhere else to fetch from a fork
 # or a pinned revision.
 
@@ -29,8 +40,10 @@ option(SC_UPDATE_HELPERS "Refresh the copies of SimplyCppFunctions.cmake and sc_
 
 set(sc_helpers_cached "${CMAKE_CURRENT_LIST_DIR}/SimplyCppFunctions.cmake")
 set(sc_test_header_cached "${CMAKE_CURRENT_SOURCE_DIR}/tests/sc_test.h")
+set(sc_bootstrap_cached "${CMAKE_CURRENT_LIST_FILE}") # this file, kept in step with the rest
 set(sc_helpers_source "")     # where to copy the helpers from, empty when already cached
 set(sc_test_header_source "")
+set(sc_bootstrap_source "")
 set(sc_helpers_origin "")
 
 # 1. An installed sc package. Its config includes the helpers itself, so the functions
@@ -43,6 +56,9 @@ if (COMMAND get_sc_version)
     endif ()
     if (SC_TEST_INCLUDE_DIR AND EXISTS "${SC_TEST_INCLUDE_DIR}/sc_test.h")
         set(sc_test_header_source "${SC_TEST_INCLUDE_DIR}/sc_test.h")
+    endif ()
+    if (EXISTS "${sc_DIR}/sc_bootstrap.cmake")
+        set(sc_bootstrap_source "${sc_DIR}/sc_bootstrap.cmake")
     endif ()
 endif ()
 
@@ -69,6 +85,7 @@ if (NOT COMMAND get_sc_version)
 
     set(sc_helpers_source "${sc_helpers_SOURCE_DIR}/cmake/SimplyCppFunctions.cmake")
     set(sc_test_header_source "${sc_helpers_SOURCE_DIR}/tests/sc_test.h")
+    set(sc_bootstrap_source "${sc_helpers_SOURCE_DIR}/cmake/sc_bootstrap.cmake")
     set(sc_helpers_origin "${SC_HELPERS_REPOSITORY}@${SC_HELPERS_TAG}")
     include("${sc_helpers_source}")
 endif ()
@@ -87,12 +104,33 @@ function(sc_cache_helper source destination what)
     if (NOT source OR NOT EXISTS "${source}")
         return()
     endif ()
-    if (EXISTS "${destination}" AND NOT SC_UPDATE_HELPERS)
-        return()
-    endif ()
     get_filename_component(destination_dir "${destination}" DIRECTORY)
     if (NOT IS_DIRECTORY "${destination_dir}")
         return()
+    endif ()
+
+    # Resolving the helpers out of the very directory being cached into, which is what
+    # core itself would do, must not copy a file over itself.
+    get_filename_component(source_path "${source}" REALPATH)
+    get_filename_component(destination_path "${destination}" ABSOLUTE)
+    if (source_path STREQUAL destination_path)
+        return()
+    endif ()
+
+    if (EXISTS "${destination}")
+        file(SHA256 "${source}" source_hash)
+        file(SHA256 "${destination}" destination_hash)
+        if (source_hash STREQUAL destination_hash)
+            return() # already in step
+        endif ()
+        if (NOT SC_UPDATE_HELPERS)
+            # Reported rather than replaced: a module may be pinned deliberately, and a
+            # file rewriting itself mid configure is not something to do unasked.
+            message(STATUS "${what} differs from the copy in ${sc_helpers_origin}"
+                    " - refresh with -DSC_UPDATE_HELPERS=ON")
+            set(sc_helpers_drifted TRUE PARENT_SCOPE)
+            return()
+        endif ()
     endif ()
 
     file(COPY_FILE "${source}" "${destination}" ONLY_IF_DIFFERENT RESULT copy_error)
@@ -104,5 +142,11 @@ function(sc_cache_helper source destination what)
     endif ()
 endfunction()
 
+set(sc_helpers_drifted FALSE)
 sc_cache_helper("${sc_helpers_source}" "${sc_helpers_cached}" "SimplyCppFunctions.cmake")
 sc_cache_helper("${sc_test_header_source}" "${sc_test_header_cached}" "sc_test.h")
+sc_cache_helper("${sc_bootstrap_source}" "${sc_bootstrap_cached}" "sc_bootstrap.cmake")
+
+if (sc_helpers_drifted AND SC_UPDATE_HELPERS)
+    message(STATUS "The refreshed helpers take effect on the next configure")
+endif ()
