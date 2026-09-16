@@ -8,8 +8,6 @@
 
 module="sc-db"
 
-apt -y install cmake clang-tidy ccache g++
-
 pushd ~/"$module" || exit
 cmake -DCMAKE_BUILD_TYPE=Release -B cmake-build-release -S . || exit
 cmake --build cmake-build-release -j 12 || exit

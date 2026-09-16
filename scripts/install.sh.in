@@ -6,9 +6,7 @@
 #
 # Runs on the server, in the directory deploy.sh synced to.
 
-module="sc-db"
-
-apt -y install cmake clang-tidy ccache g++
+module="sc-@SC_DEPLOY_NAME@"
 
 pushd ~/"$module" || exit
 cmake -DCMAKE_BUILD_TYPE=Release -B cmake-build-release -S . || exit
