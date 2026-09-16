@@ -7,11 +7,14 @@
 # Runs on the server, in the directory deploy.sh synced to.
 
 module="sc-db"
-
-pushd ~/"$module" || exit
+scriptfile=$(realpath "$0")
+scriptpath="${scriptfile%/*}"
+dirpath=$(realpath "$scriptpath"/..)
+echo "Installing $module locally from source in $dirpath"
+pushd "$dirpath" || exit
 cmake -DCMAKE_BUILD_TYPE=Release -B cmake-build-release -S . || exit
 cmake --build cmake-build-release -j 12 || exit
 ctest --test-dir cmake-build-release --output-on-failure || exit
-cmake --install cmake-build-release
+sudo cmake --install cmake-build-release
 
 popd || exit
