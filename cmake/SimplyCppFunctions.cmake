@@ -3,6 +3,12 @@ include(CMakePackageConfigHelpers)
 include(FetchContent)
 include(CMakeParseArguments)
 
+# Bumped whenever these helpers gain or change something a module might rely on.
+# sc_bootstrap.cmake compares it against a module's own copy so an older installed
+# sc-core cannot quietly replace a newer one: a module built against helpers missing
+# what its CMakeLists.txt calls fails in ways that look nothing like the cause.
+set(SC_HELPERS_VERSION 2)
+
 set(SC_VERSION_FILE "VERSION.txt")
 set(SC_VERSION_DEFAULT "1.0.0")
 
@@ -83,37 +89,57 @@ function(read_sc_version_file version_file output)
     set(${output} "${version}" PARENT_SCOPE)
 endfunction()
 
-# find_or_install_package(<package> <apt name> <brew name>)
+# find_or_install_package(<package> <apt name> <brew name> [COMPONENTS <component>...])
 #
 # Finds a dependency, installing it through the system package manager first if it is
 # missing. Anything the caller needs to set up beforehand - PostgreSQL_ROOT and the
 # like - should be set before the call.
-function(find_or_install_package package apt_name brew_name)
+#
+# A macro rather than a function: find_package() sets its result variables in the
+# calling scope, and a function would swallow them. Callers wanting OpenCV_LIBS or
+# OpenCV_INCLUDE_DIRS got nothing back. Imported targets are global, which is why the
+# callers that use only those never noticed.
+macro(find_or_install_package package apt_name brew_name)
+    cmake_parse_arguments(SC_PACKAGE "" "" "COMPONENTS" ${ARGN})
+    set(SC_PACKAGE_ARGS)
+    if (SC_PACKAGE_COMPONENTS)
+        set(SC_PACKAGE_ARGS COMPONENTS ${SC_PACKAGE_COMPONENTS})
+    endif ()
+
     message(STATUS "Detecting ${package}")
-    find_package(${package} QUIET)
-    if (${package}_FOUND)
-        message(STATUS "${package} found - ${${package}_VERSION}")
-        return()
-    endif ()
+    find_package(${package} QUIET ${SC_PACKAGE_ARGS})
 
-    if (UNIX AND EXISTS "/usr/bin/apt")
-        message(STATUS "${package} not found, attempting apt installation...")
-        execute_process(COMMAND sudo apt -y install ${apt_name} RESULT_VARIABLE INSTALL_RESULT)
-    endif ()
-    if (APPLE)
-        message(STATUS "${package} not found, attempting brew installation...")
-        execute_process(COMMAND brew install ${brew_name} RESULT_VARIABLE INSTALL_RESULT)
-    endif ()
-
-    # Re-check the package that was asked for. This used to look for CURL whatever the
-    # argument was, which happened to suit the one caller and would have masked any other.
-    find_package(${package} QUIET)
     if (NOT ${package}_FOUND)
-        message(FATAL_ERROR "Failed to install or locate ${package} (install result=${INSTALL_RESULT})")
-    endif ()
-    message(STATUS "${package} found - ${${package}_VERSION}")
-endfunction()
+        if (UNIX AND EXISTS "/usr/bin/apt")
+            message(STATUS "${package} not found, attempting apt installation...")
+            execute_process(COMMAND sudo apt -y install ${apt_name} RESULT_VARIABLE SC_PACKAGE_INSTALL_RESULT)
+        endif ()
+        if (APPLE)
+            message(STATUS "${package} not found, attempting brew installation...")
+            execute_process(COMMAND brew install ${brew_name} RESULT_VARIABLE SC_PACKAGE_INSTALL_RESULT)
+        endif ()
 
+        # Re-check the package that was asked for. This used to look for CURL whatever
+        # the argument was, which happened to suit the one caller and would have masked
+        # any other.
+        find_package(${package} QUIET ${SC_PACKAGE_ARGS})
+        if (NOT ${package}_FOUND)
+            message(FATAL_ERROR "Failed to install or locate ${package}"
+                    " (install result=${SC_PACKAGE_INSTALL_RESULT})")
+        endif ()
+    endif ()
+
+    message(STATUS "${package} found - ${${package}_VERSION}")
+endmacro()
+
+# add_sc_object(<name> [SOURCES <file>...] [INCLUDE_DIRS <dir>...]
+#               [LINK_LIBRARIES <lib>...] [PUBLIC_LINK_LIBRARIES <lib>...])
+#
+# Compiles src/<name>.cpp into an object library that the module's consolidated
+# libraries are built from. SOURCES adds anything else that belongs in the same
+# object - vendored third party code, say - and INCLUDE_DIRS what it needs to find
+# its headers. PUBLIC_LINK_LIBRARIES propagates to the consolidated libraries, for a
+# dependency a consumer has to link as well.
 function(add_sc_object object)
     # sc-obj-, not sc-: sc-<module> belongs to the consolidated library, and a module
     # with a source file named after itself would collide with it.
@@ -123,13 +149,13 @@ function(add_sc_object object)
 
     set(options)
     set(one_value_args)
-    set(multi_value_args LINK_LIBRARIES PUBLIC_LINK_LIBRARIES)
+    set(multi_value_args SOURCES INCLUDE_DIRS LINK_LIBRARIES PUBLIC_LINK_LIBRARIES)
     cmake_parse_arguments(SC_OBJECT "${options}" "${one_value_args}" "${multi_value_args}" ${ARGN})
     set(INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/include)
 
-    add_library(${object_name} OBJECT ${source_file} ${header_file})
+    add_library(${object_name} OBJECT ${source_file} ${header_file} ${SC_OBJECT_SOURCES})
     set_target_properties(${object_name} PROPERTIES EXCLUDE_FROM_ALL ON)
-    target_include_directories(${object_name} PRIVATE ${INCLUDE})
+    target_include_directories(${object_name} PRIVATE ${INCLUDE} ${SC_OBJECT_INCLUDE_DIRS})
 
     if (SC_OBJECT_LINK_LIBRARIES)
         target_link_libraries(${object_name} PRIVATE ${SC_OBJECT_LINK_LIBRARIES})
