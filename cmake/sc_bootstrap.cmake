@@ -6,7 +6,7 @@
 #     include(cmake/sc_bootstrap.cmake)
 #
 # The helpers are looked for in this order:
-#   1. An installed sc package. The live copy, on a machine that has core installed.
+#   1. An installed sc-core package. The live copy, on a machine that has core installed.
 #   2. SimplyCppFunctions.cmake next to this file. This is what a machine with no sc
 #      installed and no network uses, so it belongs in the repository.
 #   3. The sc git repository, through FetchContent. Only reached on a machine that has
@@ -64,21 +64,21 @@ set(sc_helpers_origin "")
 
 # 1. An installed sc package. Its config includes the helpers itself, so the functions
 #    exist afterwards; sc_DIR is where the copyable file sits.
-find_package(sc QUIET)
+find_package(sc-core QUIET)
 if (COMMAND get_sc_version)
-    set(sc_helpers_origin "the sc package at ${sc_DIR}")
-    if (EXISTS "${sc_DIR}/SimplyCppFunctions.cmake")
-        set(sc_helpers_source "${sc_DIR}/SimplyCppFunctions.cmake")
+    set(sc_helpers_origin "the sc-core package at ${sc-core_DIR}")
+    if (EXISTS "${sc-core_DIR}/SimplyCppFunctions.cmake")
+        set(sc_helpers_source "${sc-core_DIR}/SimplyCppFunctions.cmake")
     endif ()
     if (SC_TEST_INCLUDE_DIR AND EXISTS "${SC_TEST_INCLUDE_DIR}/sc_test.h")
         set(sc_test_header_source "${SC_TEST_INCLUDE_DIR}/sc_test.h")
     endif ()
-    if (EXISTS "${sc_DIR}/sc_bootstrap.cmake")
-        set(sc_bootstrap_source "${sc_DIR}/sc_bootstrap.cmake")
+    if (EXISTS "${sc-core_DIR}/sc_bootstrap.cmake")
+        set(sc_bootstrap_source "${sc-core_DIR}/sc_bootstrap.cmake")
     endif ()
-    file(GLOB sc_installed_templates "${sc_DIR}/*.sh.in")
+    file(GLOB sc_installed_templates "${sc-core_DIR}/*.sh.in")
     if (sc_installed_templates)
-        set(sc_scripts_source "${sc_DIR}") # installed flat next to the helpers
+        set(sc_scripts_source "${sc-core_DIR}") # installed flat next to the helpers
     endif ()
 endif ()
 
