@@ -7,8 +7,7 @@ include(CMakeParseArguments)
 # sc_bootstrap.cmake compares it against a module's own copy so an older installed
 # sc-core cannot quietly replace a newer one: a module built against helpers missing
 # what its CMakeLists.txt calls fails in ways that look nothing like the cause.
-set(SC_HELPERS_VERSION 3)
-
+set(SC_HELPERS_VERSION 5)
 set(SC_VERSION_FILE "VERSION.txt")
 set(SC_VERSION_DEFAULT "1.0.0")
 
@@ -89,6 +88,32 @@ function(read_sc_version_file version_file output)
     set(${output} "${version}" PARENT_SCOPE)
 endfunction()
 
+# sc_find_package_any_case(<package> [<find_package args>...])
+#
+# find_package() under one spelling can miss what the other finds: distributions do not
+# agree on whether a config package is installed as OpenCV or opencv. Asking under the
+# lowercase name is no answer on its own, because the config file sets its variables in
+# its own case, so a caller is left checking OpenCV_FOUND against an opencv_FOUND that
+# was never meant to match.
+#
+# Tries the name as given and then its lowercase form, and reports the result under the
+# spelling the caller used, whichever one actually resolved.
+macro(sc_find_package_any_case package)
+    find_package(${package} QUIET ${ARGN})
+
+    string(TOLOWER "${package}" SC_ANY_CASE_LOWER)
+    if (NOT ${package}_FOUND AND NOT "${SC_ANY_CASE_LOWER}" STREQUAL "${package}")
+        find_package(${SC_ANY_CASE_LOWER} QUIET ${ARGN})
+        if (${SC_ANY_CASE_LOWER}_FOUND)
+            message(STATUS "${package} resolved as ${SC_ANY_CASE_LOWER}")
+            set(${package}_FOUND TRUE)
+            if (NOT ${package}_VERSION)
+                set(${package}_VERSION "${${SC_ANY_CASE_LOWER}_VERSION}")
+            endif ()
+        endif ()
+    endif ()
+endmacro()
+
 # find_or_install_package(<package> <apt name> <brew name> [COMPONENTS <component>...])
 #
 # Finds a dependency, installing it through the system package manager first if it is
@@ -107,7 +132,8 @@ macro(find_or_install_package package apt_name brew_name)
     endif ()
 
     message(STATUS "Detecting ${package}")
-    find_package(${package} QUIET ${SC_PACKAGE_ARGS})
+    #sc_find_package_any_case(${package} ${SC_PACKAGE_ARGS})
+    find_package(${package} QUIET ${ARGN})
 
     if (NOT ${package}_FOUND)
         if (UNIX AND EXISTS "/usr/bin/apt")
@@ -122,7 +148,7 @@ macro(find_or_install_package package apt_name brew_name)
         # Re-check the package that was asked for. This used to look for CURL whatever
         # the argument was, which happened to suit the one caller and would have masked
         # any other.
-        find_package(${package} QUIET ${SC_PACKAGE_ARGS})
+        sc_find_package_any_case(${package} ${SC_PACKAGE_ARGS})
         if (NOT ${package}_FOUND)
             message(FATAL_ERROR "Failed to install or locate ${package}"
                     " (install result=${SC_PACKAGE_INSTALL_RESULT})")
@@ -156,7 +182,7 @@ macro(find_or_fetch_package package)
         set(${package}_FOUND FALSE)
     else ()
         message(STATUS "Detecting ${package}")
-        find_package(${package} QUIET ${SC_FETCH_FIND_ARGS})
+        sc_find_package_any_case(${package} ${SC_FETCH_FIND_ARGS})
     endif ()
 
     if (${package}_FOUND)
