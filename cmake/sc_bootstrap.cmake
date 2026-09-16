@@ -12,16 +12,21 @@
 #   3. The sc git repository, through FetchContent. Only reached on a machine that has
 #      neither of the above, and only for long enough to create 2.
 #
-# Whatever is found is copied to 2 when that file is missing, or when configured with
-# -DSC_UPDATE_HELPERS=ON. So the first configure on a fresh machine fetches, every
-# configure after that is offline, and the copy is refreshed on request rather than
-# silently. sc_test.h is cached into tests/ the same way, where add_sc_test() already
-# looks for it.
+# Core is the source of truth. Every configure that can reach it takes its copies of
+#   cmake/SimplyCppFunctions.cmake   the build helpers
+#   cmake/sc_bootstrap.cmake         this file
+#   scripts/*.sh.in                  the script templates, whatever core has
+#   tests/sc_test.h                  the test harness, where add_sc_test() looks
+# and regenerates each scripts/<name>.sh from its template. Adding a template to core
+# is therefore all it takes for every module to pick it up. So the first
+# configure on a fresh machine fetches, every configure after that is offline, and a
+# module follows core rather than keeping whatever it was given.
 #
-# This file keeps itself in step too: it is cached from the same source as the helpers,
-# so a copy that has fallen behind is reported, and -DSC_UPDATE_HELPERS=ON replaces it
-# along with the rest. It is the only file a new module has to start with, and one line
-# puts it there:
+# -DSC_UPDATE_HELPERS=OFF pins a module to the copies it has; differences are then
+# reported and left alone.
+#
+# This file tracks core too, so it is the only file a new module has to start with and
+# it keeps itself current from there. One line puts it in place:
 #
 #     curl -O --create-dirs --output-dir cmake \
 #         https://raw.githubusercontent.com/roelofrossouw/simply-cpp/main/cmake/sc_bootstrap.cmake
@@ -34,7 +39,9 @@
 
 set(SC_HELPERS_REPOSITORY "https://github.com/roelofrossouw/simply-cpp.git" CACHE STRING "Where to fetch the simply-cpp build helpers from")
 set(SC_HELPERS_TAG "main" CACHE STRING "Which revision of the simply-cpp build helpers to fetch")
-option(SC_UPDATE_HELPERS "Refresh the copies of the helpers, sc_test.h and the deploy scripts" ON)
+# On by default: core is the source of truth, so a module tracks it rather than keeping
+# whatever it happened to be given. Turn it off to pin a module to its current copies.
+option(SC_UPDATE_HELPERS "Track core's copies of the helpers, sc_test.h and the deploy scripts" ON)
 option(SC_DEPLOY_SCRIPTS "Create and maintain scripts/deploy.sh and scripts/run.sh" ON)
 # The directory the module is rsynced to on the server, and the one run.sh builds in.
 # Defaults to the module name so two modules cannot land on top of each other.
@@ -69,7 +76,8 @@ if (COMMAND get_sc_version)
     if (EXISTS "${sc_DIR}/sc_bootstrap.cmake")
         set(sc_bootstrap_source "${sc_DIR}/sc_bootstrap.cmake")
     endif ()
-    if (EXISTS "${sc_DIR}/deploy.sh.in")
+    file(GLOB sc_installed_templates "${sc_DIR}/*.sh.in")
+    if (sc_installed_templates)
         set(sc_scripts_source "${sc_DIR}") # installed flat next to the helpers
     endif ()
 endif ()
@@ -137,10 +145,10 @@ function(sc_cache_helper source destination what)
             return() # already in step
         endif ()
         if (NOT SC_UPDATE_HELPERS)
-            # Reported rather than replaced: a module may be pinned deliberately, and a
-            # file rewriting itself mid configure is not something to do unasked.
+            # Pinned: SC_UPDATE_HELPERS is off, so the local copy stands even though core
+            # has moved on.
             message(STATUS "${what} differs from the copy in ${sc_helpers_origin}"
-                    " - refresh with -DSC_UPDATE_HELPERS=ON")
+                    " - pinned, SC_UPDATE_HELPERS is off")
             set(sc_helpers_drifted TRUE PARENT_SCOPE)
             return()
         endif ()
@@ -162,30 +170,38 @@ sc_cache_helper("${sc_bootstrap_source}" "${sc_bootstrap_cached}" "sc_bootstrap.
 
 # The deploy scripts are templates rather than straight copies: the server directory is
 # the module name, so two modules deployed to the same box do not overwrite each other.
-if (SC_DEPLOY_SCRIPTS AND sc_scripts_source)
-    file(MAKE_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/scripts")
-    foreach (script deploy.sh run.sh)
-        if (NOT EXISTS "${sc_scripts_source}/${script}.in")
-            continue()
-        endif ()
+if (SC_DEPLOY_SCRIPTS)
+    set(sc_module_scripts "${CMAKE_CURRENT_SOURCE_DIR}/scripts")
+    file(MAKE_DIRECTORY "${sc_module_scripts}")
+
+    # Take whatever templates core has, rather than a fixed list, so adding one there
+    # is all it takes for every module to get it.
+    if (sc_scripts_source)
+        file(GLOB sc_core_templates "${sc_scripts_source}/*.sh.in")
+        foreach (template ${sc_core_templates})
+            get_filename_component(template_name "${template}" NAME)
+            sc_cache_helper("${template}" "${sc_module_scripts}/${template_name}" "${template_name}")
+        endforeach ()
+    endif ()
+
+    # Generate from the templates this module now holds, so one with no sc installed and
+    # no network still rebuilds its scripts from the copies it has.
+    file(GLOB sc_module_templates "${sc_module_scripts}/*.sh.in")
+    foreach (template ${sc_module_templates})
+        get_filename_component(script "${template}" NAME_WLE) # deploy.sh.in -> deploy.sh
         # Configured into the build tree first, so the comparison is against what this
         # module's copy should say, not against the unsubstituted template.
-        configure_file("${sc_scripts_source}/${script}.in" "${CMAKE_CURRENT_BINARY_DIR}/sc-scripts/${script}" @ONLY)
+        configure_file("${template}" "${CMAKE_CURRENT_BINARY_DIR}/sc-scripts/${script}" @ONLY)
         sc_cache_helper("${CMAKE_CURRENT_BINARY_DIR}/sc-scripts/${script}"
-                "${CMAKE_CURRENT_SOURCE_DIR}/scripts/${script}" "${script}")
-        if (EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/scripts/${script}")
-            file(CHMOD "${CMAKE_CURRENT_SOURCE_DIR}/scripts/${script}"
+                "${sc_module_scripts}/${script}" "${script}")
+        if (EXISTS "${sc_module_scripts}/${script}")
+            file(CHMOD "${sc_module_scripts}/${script}"
                     PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE)
         endif ()
     endforeach ()
 endif ()
 
-if (sc_helpers_drifted AND SC_UPDATE_HELPERS)
+if (sc_helpers_drifted)
     message(STATUS "The refreshed helpers take effect on the next configure")
 endif ()
 
-# A one shot, not a mode. -D puts it in the cache, where it would otherwise stay on for
-# the life of the build directory and quietly overwrite every later local edit.
-if (SC_UPDATE_HELPERS)
-    set(SC_UPDATE_HELPERS OFF CACHE BOOL "Refresh the copies of the helpers, sc_test.h and the deploy scripts" FORCE)
-endif ()
