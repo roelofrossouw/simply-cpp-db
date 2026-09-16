@@ -1,6 +1,5 @@
 #include "postgres.h"
 
-#include <format>
 #include <libpq-fe.h>
 #include <stdexcept>
 
@@ -99,7 +98,9 @@ namespace sc {
     }
 
     postgres::postgres(std::string host, std::string db, std::string user, std::string passwd) {
-        impl = new pg::postgres(std::format("host={} dbname={} user={} password={}", host, db, user, passwd));
+        // Concatenated rather than std::format: libstdc++ only ships <format> from
+        // GCC 13, and Ubuntu jammy is still on GCC 11.
+        impl = new pg::postgres("host=" + host + " dbname=" + db + " user=" + user + " password=" + passwd);
     }
 
     postgres::~postgres() {
