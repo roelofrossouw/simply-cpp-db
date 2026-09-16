@@ -43,6 +43,10 @@ set(SC_HELPERS_TAG "main" CACHE STRING "Which revision of the simply-cpp build h
 # whatever it happened to be given. Turn it off to pin a module to its current copies.
 option(SC_UPDATE_HELPERS "Track core's copies of the helpers, sc_test.h and the deploy scripts" ON)
 option(SC_DEPLOY_SCRIPTS "Create and maintain scripts/deploy.sh and scripts/run.sh" ON)
+# A module that builds core from source has to turn this off, or find_package() imports
+# sc::sc-core here and the fetched source cannot then define a target of that name.
+# Set it as a normal variable before including this file.
+option(SC_HELPERS_USE_PACKAGE "Take the helpers from an installed sc-core when there is one" ON)
 # The directory the module is rsynced to on the server, and the one run.sh builds in.
 # Defaults to the module name so two modules cannot land on top of each other.
 if (NOT SC_DEPLOY_NAME)
@@ -78,7 +82,9 @@ endfunction()
 
 # 1. An installed sc-core package. Its config includes the helpers itself, so the
 #    functions exist afterwards; sc-core_DIR is where the copyable file sits.
-find_package(sc-core QUIET)
+if (SC_HELPERS_USE_PACKAGE)
+    find_package(sc-core QUIET)
+endif ()
 if (COMMAND get_sc_version)
     set(sc_helpers_origin "the sc-core package at ${sc-core_DIR}")
     if (EXISTS "${sc-core_DIR}/SimplyCppFunctions.cmake")

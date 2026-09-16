@@ -7,7 +7,7 @@ include(CMakeParseArguments)
 # sc_bootstrap.cmake compares it against a module's own copy so an older installed
 # sc-core cannot quietly replace a newer one: a module built against helpers missing
 # what its CMakeLists.txt calls fails in ways that look nothing like the cause.
-set(SC_HELPERS_VERSION 2)
+set(SC_HELPERS_VERSION 3)
 
 set(SC_VERSION_FILE "VERSION.txt")
 set(SC_VERSION_DEFAULT "1.0.0")
@@ -130,6 +130,54 @@ macro(find_or_install_package package apt_name brew_name)
     endif ()
 
     message(STATUS "${package} found - ${${package}_VERSION}")
+endmacro()
+
+# find_or_fetch_package(<package> [GIT_REPOSITORY <url>] [GIT_TAG <ref>] [VERSION <version>]
+#                       [COMPONENTS <component>...] [FORCE <bool>] [DECLARE_ARGS <arg>...])
+#
+# Uses an installed <package> when there is one and builds it from source otherwise,
+# which is how a module depends on another simply-cpp module without requiring it to
+# be installed first. FORCE skips the lookup and always fetches.
+#
+# A macro for the same reason find_or_install_package is one: find_package() and
+# FetchContent set their results - <package>_VERSION, <package>_SOURCE_DIR and the
+# rest - in the calling scope, and a function would swallow them.
+macro(find_or_fetch_package package)
+    cmake_parse_arguments(SC_FETCH "" "GIT_REPOSITORY;GIT_TAG;VERSION;FORCE" "COMPONENTS;DECLARE_ARGS" ${ARGN})
+
+    set(SC_FETCH_FIND_ARGS ${SC_FETCH_VERSION})
+    if (SC_FETCH_COMPONENTS)
+        list(APPEND SC_FETCH_FIND_ARGS COMPONENTS ${SC_FETCH_COMPONENTS})
+    endif ()
+
+    if (SC_FETCH_FORCE)
+        # Not merely skipped: a stale value from an earlier configure would otherwise
+        # look like a successful lookup.
+        set(${package}_FOUND FALSE)
+    else ()
+        message(STATUS "Detecting ${package}")
+        find_package(${package} QUIET ${SC_FETCH_FIND_ARGS})
+    endif ()
+
+    if (${package}_FOUND)
+        message(STATUS "${package} found - ${${package}_VERSION}")
+    else ()
+        if (NOT SC_FETCH_GIT_REPOSITORY)
+            message(FATAL_ERROR "find_or_fetch_package(${package}): not installed,"
+                    " and no GIT_REPOSITORY given to fetch it from")
+        endif ()
+        if (NOT SC_FETCH_GIT_TAG)
+            set(SC_FETCH_GIT_TAG main)
+        endif ()
+        message(STATUS "Fetching ${package} - ${SC_FETCH_GIT_REPOSITORY}@${SC_FETCH_GIT_TAG}")
+        FetchContent_Declare(${package}
+                GIT_REPOSITORY ${SC_FETCH_GIT_REPOSITORY}
+                GIT_TAG ${SC_FETCH_GIT_TAG}
+                GIT_SHALLOW TRUE
+                EXCLUDE_FROM_ALL
+                ${SC_FETCH_DECLARE_ARGS})
+        FetchContent_MakeAvailable(${package})
+    endif ()
 endmacro()
 
 # add_sc_object(<name> [SOURCES <file>...] [INCLUDE_DIRS <dir>...]
