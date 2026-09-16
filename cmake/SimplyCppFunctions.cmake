@@ -142,6 +142,98 @@ function(add_sc_object object)
     endif ()
 endfunction()
 
+# add_sc_libraries(<name> [DESCRIPTION <text>] [VERSION <version>] [INCLUDE_DIR <dir>])
+#
+# Builds the pair of libraries every module exports from the objects collected in
+# SOURCE_OBJECTS: a static <name> and a shared <name>-shared, aliased sc::<name> and
+# sc::<name>-shared. Both are appended to SOURCE_LIBRARIES for install_sc_module().
+#
+# The two are siblings built from the same objects. Neither links the other: doing so
+# put the static library on the link line of anyone who chose the shared one, which is
+# the same code twice.
+function(add_sc_libraries name)
+    set(one_value_args DESCRIPTION VERSION INCLUDE_DIR)
+    cmake_parse_arguments(ARG "" "${one_value_args}" "" ${ARGN})
+
+    if (NOT ARG_VERSION)
+        set(ARG_VERSION "${SC_VERSION}")
+    endif ()
+    if (NOT ARG_INCLUDE_DIR)
+        set(ARG_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/include")
+    endif ()
+    if (NOT ARG_DESCRIPTION)
+        set(ARG_DESCRIPTION "simply-cpp ${name}")
+    endif ()
+    string(REGEX MATCH "^[0-9]+" version_major "${ARG_VERSION}")
+
+    # Captured before the new targets are added, so they link the module's dependencies
+    # and not each other.
+    set(dependencies ${SOURCE_LIBRARIES} ${SOURCE_LINK_LIBRARIES})
+
+    foreach (kind STATIC SHARED)
+        set(target "${name}")
+        set(what "consolidated static library")
+        if (kind STREQUAL "SHARED")
+            set(target "${name}-shared")
+            set(what "common shared library")
+        endif ()
+
+        add_library(${target} ${kind} ${SOURCE_OBJECTS})
+        add_library(sc::${target} ALIAS ${target})
+        set_target_properties(${target} PROPERTIES
+                VERSION ${ARG_VERSION}
+                SOVERSION ${version_major}
+                DESCRIPTION "${ARG_DESCRIPTION} ${what}")
+        target_include_directories(${target} PUBLIC
+                $<BUILD_INTERFACE:${ARG_INCLUDE_DIR}>
+                $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>)
+        target_link_libraries(${target} PUBLIC ${dependencies})
+        list(APPEND SOURCE_LIBRARIES ${target})
+    endforeach ()
+
+    set(SOURCE_LIBRARIES "${SOURCE_LIBRARIES}" PARENT_SCOPE)
+endfunction()
+
+# install_sc_module(<name> [VERSION <version>] [CONFIG_TEMPLATE <file>] [PATH_VARS <var>...])
+#
+# Installs everything in SOURCE_LIBRARIES plus the module's headers, and writes the
+# <name>Config.cmake / <name>ConfigVersion.cmake a consumer finds with
+# find_package(<name>). CONFIG_TEMPLATE defaults to cmake/<name>Config.cmake.in.
+function(install_sc_module name)
+    set(one_value_args VERSION CONFIG_TEMPLATE)
+    set(multi_value_args PATH_VARS)
+    cmake_parse_arguments(ARG "" "${one_value_args}" "${multi_value_args}" ${ARGN})
+
+    if (NOT ARG_VERSION)
+        set(ARG_VERSION "${SC_VERSION}")
+    endif ()
+    if (NOT ARG_CONFIG_TEMPLATE)
+        set(ARG_CONFIG_TEMPLATE "${CMAKE_CURRENT_SOURCE_DIR}/cmake/${name}Config.cmake.in")
+    endif ()
+    if (NOT EXISTS "${ARG_CONFIG_TEMPLATE}")
+        message(FATAL_ERROR "install_sc_module(${name}): no package config template at ${ARG_CONFIG_TEMPLATE}")
+    endif ()
+
+    set(package_destination "${CMAKE_INSTALL_LIBDIR}/cmake/${name}")
+
+    install(TARGETS ${SOURCE_LIBRARIES} EXPORT ${name}Targets)
+    # Finder litters include/ and install(DIRECTORY) copies whatever it finds.
+    install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+            PATTERN ".DS_Store" EXCLUDE)
+    install(EXPORT ${name}Targets FILE ${name}Targets.cmake NAMESPACE sc:: DESTINATION ${package_destination})
+
+    configure_package_config_file(${ARG_CONFIG_TEMPLATE} ${CMAKE_CURRENT_BINARY_DIR}/${name}Config.cmake
+            INSTALL_DESTINATION ${package_destination}
+            PATH_VARS ${ARG_PATH_VARS})
+    write_basic_package_version_file(${CMAKE_CURRENT_BINARY_DIR}/${name}ConfigVersion.cmake
+            VERSION ${ARG_VERSION} COMPATIBILITY SameMajorVersion)
+    # ${CMAKE_INSTALL_LIBDIR}, not a literal lib: the export above already uses it, and
+    # the two have to agree on a distribution that uses lib64.
+    install(FILES ${CMAKE_CURRENT_BINARY_DIR}/${name}Config.cmake
+            ${CMAKE_CURRENT_BINARY_DIR}/${name}ConfigVersion.cmake
+            DESTINATION ${package_destination})
+endfunction()
+
 # add_sc_test(<name> [TIMEOUT <seconds>] [LABELS <label>...] [LINK_LIBRARIES <lib>...])
 #
 # Builds <name>.cpp in the current directory into test-<name> and registers it with
