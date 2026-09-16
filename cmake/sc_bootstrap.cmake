@@ -62,8 +62,22 @@ set(sc_bootstrap_source "")
 set(sc_scripts_source "")     # directory holding deploy.sh.in and run.sh.in
 set(sc_helpers_origin "")
 
-# 1. An installed sc package. Its config includes the helpers itself, so the functions
-#    exist afterwards; sc_DIR is where the copyable file sits.
+# Reads SC_HELPERS_VERSION out of a helpers file without including it. Absent means 0,
+# which is any copy predating the version stamp.
+function(sc_helpers_file_version file output)
+    set(${output} 0 PARENT_SCOPE)
+    if (NOT EXISTS "${file}")
+        return()
+    endif ()
+    file(STRINGS "${file}" version_line REGEX "^set\\(SC_HELPERS_VERSION ")
+    if (version_line)
+        string(REGEX MATCH "[0-9]+" file_version "${version_line}")
+        set(${output} "${file_version}" PARENT_SCOPE)
+    endif ()
+endfunction()
+
+# 1. An installed sc-core package. Its config includes the helpers itself, so the
+#    functions exist afterwards; sc-core_DIR is where the copyable file sits.
 find_package(sc-core QUIET)
 if (COMMAND get_sc_version)
     set(sc_helpers_origin "the sc-core package at ${sc-core_DIR}")
@@ -79,6 +93,29 @@ if (COMMAND get_sc_version)
     file(GLOB sc_installed_templates "${sc-core_DIR}/*.sh.in")
     if (sc_installed_templates)
         set(sc_scripts_source "${sc-core_DIR}") # installed flat next to the helpers
+    endif ()
+endif ()
+
+# An installed sc-core older than this module's own copy is ignored outright. It would
+# otherwise win on both counts: its helpers are the ones actually loaded, and with
+# tracking on they overwrite the newer copy on the way past. A module then builds
+# against helpers missing whatever its CMakeLists.txt relies on, and the errors look
+# nothing like the cause.
+if (COMMAND get_sc_version AND EXISTS "${sc_helpers_cached}")
+    sc_helpers_file_version("${sc_helpers_source}" sc_installed_helpers_version)
+    sc_helpers_file_version("${sc_helpers_cached}" sc_local_helpers_version)
+    if (sc_local_helpers_version GREATER sc_installed_helpers_version)
+        message(WARNING "The sc-core installed at ${sc-core_DIR} carries helpers version"
+                " ${sc_installed_helpers_version}, older than this module's"
+                " ${sc_local_helpers_version} - using the local copy instead."
+                " Rebuild and reinstall simply-cpp core to clear this.")
+        include("${sc_helpers_cached}")
+        set(sc_helpers_origin "${sc_helpers_cached}")
+        # Nothing is taken from an installation this far behind.
+        set(sc_helpers_source "")
+        set(sc_test_header_source "")
+        set(sc_bootstrap_source "")
+        set(sc_scripts_source "")
     endif ()
 endif ()
 
