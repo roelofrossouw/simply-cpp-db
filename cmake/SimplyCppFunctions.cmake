@@ -115,7 +115,9 @@ function(find_or_install_package package apt_name brew_name)
 endfunction()
 
 function(add_sc_object object)
-    set(object_name "sc-${object}")
+    # sc-obj-, not sc-: sc-<module> belongs to the consolidated library, and a module
+    # with a source file named after itself would collide with it.
+    set(object_name "sc-obj-${object}")
     set(source_file "src/${object}.cpp")
     set(header_file "include/${object}.h")
 
@@ -142,19 +144,36 @@ function(add_sc_object object)
     endif ()
 endfunction()
 
-# add_sc_libraries(<name> [DESCRIPTION <text>] [VERSION <version>] [INCLUDE_DIR <dir>])
+# sc_module_name(<output>)
+#
+# The name a module's library and package go by, sc-<SC_MODULE>: sc-core, sc-db. Set
+# SC_MODULE at the top of the module's CMakeLists.txt, before these are called.
+function(sc_module_name output)
+    if (NOT SC_MODULE)
+        message(FATAL_ERROR "SC_MODULE is not set."
+                " Set it before add_sc_libraries()/install_sc_module(), or pass NAME.")
+    endif ()
+    set(${output} "sc-${SC_MODULE}" PARENT_SCOPE)
+endfunction()
+
+# add_sc_libraries([NAME <name>] [DESCRIPTION <text>] [VERSION <version>] [INCLUDE_DIR <dir>])
 #
 # Builds the pair of libraries every module exports from the objects collected in
 # SOURCE_OBJECTS: a static <name> and a shared <name>-shared, aliased sc::<name> and
-# sc::<name>-shared. Both are appended to SOURCE_LIBRARIES for install_sc_module().
+# sc::<name>-shared. NAME defaults to sc-<SC_MODULE>. Both are appended to
+# SOURCE_LIBRARIES for install_sc_module().
 #
 # The two are siblings built from the same objects. Neither links the other: doing so
 # put the static library on the link line of anyone who chose the shared one, which is
 # the same code twice.
-function(add_sc_libraries name)
-    set(one_value_args DESCRIPTION VERSION INCLUDE_DIR)
+function(add_sc_libraries)
+    set(one_value_args NAME DESCRIPTION VERSION INCLUDE_DIR)
     cmake_parse_arguments(ARG "" "${one_value_args}" "" ${ARGN})
 
+    set(name "${ARG_NAME}")
+    if (NOT name)
+        sc_module_name(name)
+    endif ()
     if (NOT ARG_VERSION)
         set(ARG_VERSION "${SC_VERSION}")
     endif ()
@@ -194,16 +213,21 @@ function(add_sc_libraries name)
     set(SOURCE_LIBRARIES "${SOURCE_LIBRARIES}" PARENT_SCOPE)
 endfunction()
 
-# install_sc_module(<name> [VERSION <version>] [CONFIG_TEMPLATE <file>] [PATH_VARS <var>...])
+# install_sc_module([NAME <name>] [VERSION <version>] [CONFIG_TEMPLATE <file>] [PATH_VARS <var>...])
 #
 # Installs everything in SOURCE_LIBRARIES plus the module's headers, and writes the
 # <name>Config.cmake / <name>ConfigVersion.cmake a consumer finds with
-# find_package(<name>). CONFIG_TEMPLATE defaults to cmake/<name>Config.cmake.in.
-function(install_sc_module name)
-    set(one_value_args VERSION CONFIG_TEMPLATE)
+# find_package(<name>). NAME defaults to sc-<SC_MODULE>, and CONFIG_TEMPLATE to
+# cmake/<name>Config.cmake.in.
+function(install_sc_module)
+    set(one_value_args NAME VERSION CONFIG_TEMPLATE)
     set(multi_value_args PATH_VARS)
     cmake_parse_arguments(ARG "" "${one_value_args}" "${multi_value_args}" ${ARGN})
 
+    set(name "${ARG_NAME}")
+    if (NOT name)
+        sc_module_name(name)
+    endif ()
     if (NOT ARG_VERSION)
         set(ARG_VERSION "${SC_VERSION}")
     endif ()

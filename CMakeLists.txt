@@ -42,12 +42,12 @@ add_sc_object(postgres LINK_LIBRARIES PostgreSQL::PostgreSQL PUBLIC_LINK_LIBRARI
 ######################
 # Exported Libraries #
 ######################
-add_sc_libraries(sc-db DESCRIPTION "simply-cpp-db")
+add_sc_libraries(DESCRIPTION "simply-cpp-db")
 
 ################
 # Installation #
 ################
-install_sc_module(sc-db)
+install_sc_module()
 
 #########
 # Tests #
