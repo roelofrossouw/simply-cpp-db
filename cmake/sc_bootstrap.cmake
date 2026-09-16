@@ -32,11 +32,9 @@
 # Point SC_HELPERS_REPOSITORY and SC_HELPERS_TAG somewhere else to fetch from a fork
 # or a pinned revision.
 
-set(SC_HELPERS_REPOSITORY "https://github.com/roelofrossouw/simply-cpp.git"
-        CACHE STRING "Where to fetch the simply-cpp build helpers from")
-set(SC_HELPERS_TAG "main"
-        CACHE STRING "Which revision of the simply-cpp build helpers to fetch")
-option(SC_UPDATE_HELPERS "Refresh the copies of the helpers, sc_test.h and the deploy scripts" OFF)
+set(SC_HELPERS_REPOSITORY "https://github.com/roelofrossouw/simply-cpp.git" CACHE STRING "Where to fetch the simply-cpp build helpers from")
+set(SC_HELPERS_TAG "main" CACHE STRING "Which revision of the simply-cpp build helpers to fetch")
+option(SC_UPDATE_HELPERS "Refresh the copies of the helpers, sc_test.h and the deploy scripts" ON)
 option(SC_DEPLOY_SCRIPTS "Create and maintain scripts/deploy.sh and scripts/run.sh" ON)
 # The directory the module is rsynced to on the server, and the one run.sh builds in.
 # Defaults to the module name so two modules cannot land on top of each other.
