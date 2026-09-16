@@ -11,18 +11,9 @@ option(SC_DB_BUILD_TESTS "Build simply-cpp-db tests" ${PROJECT_IS_TOP_LEVEL})
 
 # The build helpers - get_sc_version(), add_sc_object(), add_sc_test(),
 # find_or_install_package() - come from simply-cpp core so every module configures the
-# same way instead of keeping its own copy. Core has to be installed first:
-#     cmake -B build -S . && cmake --build build && cmake --install build
-# Add -DCMAKE_PREFIX_PATH=<prefix> here if it did not go to a default location.
-find_package(sc REQUIRED)
-
-# An sc install from before the helpers were exported still satisfies find_package,
-# and the next line would then fail with nothing more useful than "Unknown CMake
-# command". Say what is actually wrong instead.
-if (NOT COMMAND get_sc_version)
-    message(FATAL_ERROR "The sc package at ${sc_DIR} does not provide the simply-cpp build helpers."
-            " It predates them - rebuild and reinstall simply-cpp core, then configure again.")
-endif ()
+# same way instead of keeping its own copy. The bootstrap takes them from an installed
+# sc package, the copy in cmake/, or the sc repository, whichever it finds first.
+include(cmake/sc_bootstrap.cmake)
 
 get_sc_version()
 message(STATUS "SimplyCPP ${SC_MODULE} Version: ${SC_VERSION}")
