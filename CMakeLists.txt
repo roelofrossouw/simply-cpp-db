@@ -1,74 +1,79 @@
 cmake_minimum_required(VERSION 3.22)
+set(SC_MODULE db)
+project(simply-cpp-${SC_MODULE} LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
-find_package(Git QUIET)
-if (Git_FOUND)
-    execute_process(
-            COMMAND ${GIT_EXECUTABLE} describe --tags --abbrev=0
-            WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-            OUTPUT_VARIABLE SC_DB_VERSION
-            OUTPUT_STRIP_TRAILING_WHITESPACE
-            ERROR_QUIET
-            RESULT_VARIABLE GIT_RESULT
-    )
-    if (GIT_RESULT EQUAL 0)
-        string(REGEX REPLACE "^v" "" SC_DB_VERSION "${SC_DB_VERSION}")
-    else ()
-        set(SC_DB_VERSION "1.0.0")
-    endif ()
-else ()
-    set(SC_DB_VERSION "1.0.0")
+# Options:
+option(SC_DB_BUILD_TESTS "Build simply-cpp-db tests" ${PROJECT_IS_TOP_LEVEL})
+
+# The build helpers - get_sc_version(), add_sc_object(), add_sc_test(),
+# find_or_install_package() - come from simply-cpp core so every module configures the
+# same way instead of keeping its own copy. Core has to be installed first:
+#     cmake -B build -S . && cmake --build build && cmake --install build
+# Add -DCMAKE_PREFIX_PATH=<prefix> here if it did not go to a default location.
+find_package(sc REQUIRED)
+
+# An sc install from before the helpers were exported still satisfies find_package,
+# and the next line would then fail with nothing more useful than "Unknown CMake
+# command". Say what is actually wrong instead.
+if (NOT COMMAND get_sc_version)
+    message(FATAL_ERROR "The sc package at ${sc_DIR} does not provide the simply-cpp build helpers."
+            " It predates them - rebuild and reinstall simply-cpp core, then configure again.")
 endif ()
 
-message(STATUS "SC DB Version: ${SC_DB_VERSION}")
-project(simply-cpp-db VERSION ${SC_DB_VERSION} DESCRIPTION "simply-cpp common shared library")
+get_sc_version()
+message(STATUS "SimplyCPP ${SC_MODULE} Version: ${SC_VERSION}")
 
-# Options:
-option(SC_DB_BUILD_TESTS "Build simply-cpp tests" ${PROJECT_IS_TOP_LEVEL})
-
-include(GNUInstallDirs)
-include(CMakePackageConfigHelpers)
-
-#################
-#  Dependencies #
-#################
+################
+# Dependencies #
+################
 
 ## Postgres ##
-if (APPLE)
-    execute_process(COMMAND pg_config --libdir OUTPUT_VARIABLE PostgreSQL_ROOT OUTPUT_STRIP_TRAILING_WHITESPACE)
+# pg_config knows where a brew keg landed, find_package on its own does not. The same
+# hint is in cmake/sc-dbConfig.cmake.in for consumers of the installed package.
+if (APPLE AND NOT PostgreSQL_ROOT)
+    execute_process(COMMAND pg_config --libdir
+            OUTPUT_VARIABLE PostgreSQL_ROOT OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET)
 endif ()
-find_package(PostgreSQL QUIET)
-if (NOT PostgreSQL_FOUND)
-    if (UNIX AND EXISTS "/usr/bin/apt")
-        execute_process(COMMAND sudo apt -y install postgresql-server-dev-all RESULT_VARIABLE INSTALL_RESULT)
-    elseif (APPLE)
-        execute_process(COMMAND brew install -y postgres RESULT_VARIABLE INSTALL_RESULT)
-    endif ()
-    find_package(PostgreSQL QUIET)
-    if (NOT PostgreSQL_FOUND)
-        message(FATAL_ERROR "Failed to install or locate PostgreSQL (Try a couple of times, might be locking) (result=${INSTALL_RESULT})")
-    endif ()
-endif ()
+find_or_install_package(PostgreSQL postgresql-server-dev-all postgresql)
 
-#############
-# Libraries #
-#############
+###########
+# Objects #
+###########
+set(SOURCE_OBJECTS include/postgres.h)
 set(SOURCE_LIBRARIES)
+set(SOURCE_LINK_LIBRARIES)
 
-set(OBJECT_NAME sc-postgres)
-add_library(${OBJECT_NAME} OBJECT src/postgres.cpp include/postgres.h)
-add_library(sc::sc-db ALIAS ${OBJECT_NAME})
-target_include_directories(${OBJECT_NAME} PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include> $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>)
-target_link_libraries(${OBJECT_NAME} PUBLIC PostgreSQL::PostgreSQL)
-list(APPEND SOURCE_LIBRARIES ${OBJECT_NAME})
+add_sc_object(postgres LINK_LIBRARIES PostgreSQL::PostgreSQL PUBLIC_LINK_LIBRARIES PostgreSQL::PostgreSQL)
 
+######################
+# Exported Libraries #
+######################
+
+# Static
+project(sc-db VERSION ${SC_VERSION} DESCRIPTION "simply-cpp-db consolidated static library")
+add_library(${PROJECT_NAME} STATIC ${SOURCE_OBJECTS})
+add_library(sc::sc-db ALIAS ${PROJECT_NAME})
+set_target_properties(${PROJECT_NAME} PROPERTIES VERSION ${PROJECT_VERSION} SOVERSION ${PROJECT_VERSION_MAJOR})
+target_include_directories(${PROJECT_NAME} PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include> $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>)
+target_link_libraries(${PROJECT_NAME} PUBLIC ${SOURCE_LIBRARIES} ${SOURCE_LINK_LIBRARIES})
+list(APPEND SOURCE_LIBRARIES sc-db)
+
+# Shared
+project(sc-db-shared VERSION ${SC_VERSION} DESCRIPTION "simply-cpp-db common shared library")
+add_library(${PROJECT_NAME} SHARED ${SOURCE_OBJECTS})
+add_library(sc::sc-db-shared ALIAS ${PROJECT_NAME})
+set_target_properties(${PROJECT_NAME} PROPERTIES VERSION ${PROJECT_VERSION} SOVERSION ${PROJECT_VERSION_MAJOR})
+target_include_directories(${PROJECT_NAME} PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include> $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>)
+target_link_libraries(${PROJECT_NAME} PUBLIC ${SOURCE_LIBRARIES} ${SOURCE_LINK_LIBRARIES})
+list(APPEND SOURCE_LIBRARIES sc-db-shared)
 
 ################
 # Installation #
 ################
-
 install(TARGETS ${SOURCE_LIBRARIES} EXPORT sc-dbTargets)
 install(DIRECTORY include/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
 install(EXPORT sc-dbTargets FILE sc-dbTargets.cmake NAMESPACE sc:: DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/sc-db)
@@ -76,9 +81,10 @@ configure_package_config_file(cmake/sc-dbConfig.cmake.in ${CMAKE_CURRENT_BINARY_
 write_basic_package_version_file(${CMAKE_CURRENT_BINARY_DIR}/sc-dbConfigVersion.cmake VERSION ${PROJECT_VERSION} COMPATIBILITY SameMajorVersion)
 install(FILES ${CMAKE_CURRENT_BINARY_DIR}/sc-dbConfig.cmake ${CMAKE_CURRENT_BINARY_DIR}/sc-dbConfigVersion.cmake DESTINATION lib/cmake/sc-db)
 
-###########
-#  Tests  #
-###########
+#########
+# Tests #
+#########
 if (SC_DB_BUILD_TESTS)
-    add_subdirectory(tests sc-db-test EXCLUDE_FROM_ALL)
+    enable_testing()
+    add_subdirectory(tests sc-db-test)
 endif ()
