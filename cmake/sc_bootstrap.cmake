@@ -36,7 +36,17 @@ set(SC_HELPERS_REPOSITORY "https://github.com/roelofrossouw/simply-cpp.git"
         CACHE STRING "Where to fetch the simply-cpp build helpers from")
 set(SC_HELPERS_TAG "main"
         CACHE STRING "Which revision of the simply-cpp build helpers to fetch")
-option(SC_UPDATE_HELPERS "Refresh the copies of SimplyCppFunctions.cmake and sc_test.h" OFF)
+option(SC_UPDATE_HELPERS "Refresh the copies of the helpers, sc_test.h and the deploy scripts" OFF)
+option(SC_DEPLOY_SCRIPTS "Create and maintain scripts/deploy.sh and scripts/run.sh" ON)
+# The directory the module is rsynced to on the server, and the one run.sh builds in.
+# Defaults to the module name so two modules cannot land on top of each other.
+if (NOT SC_DEPLOY_NAME)
+    if (SC_MODULE)
+        set(SC_DEPLOY_NAME "${SC_MODULE}")
+    else ()
+        set(SC_DEPLOY_NAME "${PROJECT_NAME}")
+    endif ()
+endif ()
 
 set(sc_helpers_cached "${CMAKE_CURRENT_LIST_DIR}/SimplyCppFunctions.cmake")
 set(sc_test_header_cached "${CMAKE_CURRENT_SOURCE_DIR}/tests/sc_test.h")
@@ -44,6 +54,7 @@ set(sc_bootstrap_cached "${CMAKE_CURRENT_LIST_FILE}") # this file, kept in step 
 set(sc_helpers_source "")     # where to copy the helpers from, empty when already cached
 set(sc_test_header_source "")
 set(sc_bootstrap_source "")
+set(sc_scripts_source "")     # directory holding deploy.sh.in and run.sh.in
 set(sc_helpers_origin "")
 
 # 1. An installed sc package. Its config includes the helpers itself, so the functions
@@ -59,6 +70,9 @@ if (COMMAND get_sc_version)
     endif ()
     if (EXISTS "${sc_DIR}/sc_bootstrap.cmake")
         set(sc_bootstrap_source "${sc_DIR}/sc_bootstrap.cmake")
+    endif ()
+    if (EXISTS "${sc_DIR}/deploy.sh.in")
+        set(sc_scripts_source "${sc_DIR}") # installed flat next to the helpers
     endif ()
 endif ()
 
@@ -86,6 +100,7 @@ if (NOT COMMAND get_sc_version)
     set(sc_helpers_source "${sc_helpers_SOURCE_DIR}/cmake/SimplyCppFunctions.cmake")
     set(sc_test_header_source "${sc_helpers_SOURCE_DIR}/tests/sc_test.h")
     set(sc_bootstrap_source "${sc_helpers_SOURCE_DIR}/cmake/sc_bootstrap.cmake")
+    set(sc_scripts_source "${sc_helpers_SOURCE_DIR}/scripts")
     set(sc_helpers_origin "${SC_HELPERS_REPOSITORY}@${SC_HELPERS_TAG}")
     include("${sc_helpers_source}")
 endif ()
@@ -147,6 +162,32 @@ sc_cache_helper("${sc_helpers_source}" "${sc_helpers_cached}" "SimplyCppFunction
 sc_cache_helper("${sc_test_header_source}" "${sc_test_header_cached}" "sc_test.h")
 sc_cache_helper("${sc_bootstrap_source}" "${sc_bootstrap_cached}" "sc_bootstrap.cmake")
 
+# The deploy scripts are templates rather than straight copies: the server directory is
+# the module name, so two modules deployed to the same box do not overwrite each other.
+if (SC_DEPLOY_SCRIPTS AND sc_scripts_source)
+    file(MAKE_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/scripts")
+    foreach (script deploy.sh run.sh)
+        if (NOT EXISTS "${sc_scripts_source}/${script}.in")
+            continue()
+        endif ()
+        # Configured into the build tree first, so the comparison is against what this
+        # module's copy should say, not against the unsubstituted template.
+        configure_file("${sc_scripts_source}/${script}.in" "${CMAKE_CURRENT_BINARY_DIR}/sc-scripts/${script}" @ONLY)
+        sc_cache_helper("${CMAKE_CURRENT_BINARY_DIR}/sc-scripts/${script}"
+                "${CMAKE_CURRENT_SOURCE_DIR}/scripts/${script}" "${script}")
+        if (EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/scripts/${script}")
+            file(CHMOD "${CMAKE_CURRENT_SOURCE_DIR}/scripts/${script}"
+                    PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE)
+        endif ()
+    endforeach ()
+endif ()
+
 if (sc_helpers_drifted AND SC_UPDATE_HELPERS)
     message(STATUS "The refreshed helpers take effect on the next configure")
+endif ()
+
+# A one shot, not a mode. -D puts it in the cache, where it would otherwise stay on for
+# the life of the build directory and quietly overwrite every later local edit.
+if (SC_UPDATE_HELPERS)
+    set(SC_UPDATE_HELPERS OFF CACHE BOOL "Refresh the copies of the helpers, sc_test.h and the deploy scripts" FORCE)
 endif ()
