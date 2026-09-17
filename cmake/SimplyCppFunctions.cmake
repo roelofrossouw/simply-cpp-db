@@ -7,7 +7,7 @@ include(CMakeParseArguments)
 # sc_bootstrap.cmake compares it against a module's own copy so an older installed
 # sc-core cannot quietly replace a newer one: a module built against helpers missing
 # what its CMakeLists.txt calls fails in ways that look nothing like the cause.
-set(SC_HELPERS_VERSION 7)
+set(SC_HELPERS_VERSION 8)
 set(SC_VERSION_FILE "VERSION.txt")
 set(SC_VERSION_DEFAULT "1.0.0")
 
