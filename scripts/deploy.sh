@@ -14,6 +14,6 @@ scriptpath="${scriptfile%/*}"
 dirpath=$(realpath "$scriptpath"/..)
 echo "Syncing $dirpath to $server:$module"
 pushd "$dirpath" || exit
-rsync -av ./ "$user@$server:$module/" --exclude=".git" --exclude=".idea" --exclude="cmake-*" --delete || exit
-ssh "$user@$server" "./$module/scripts/run.sh"
+rsync -av ./ "$user@$server:/var/www/build/$module/" --exclude=".git" --exclude=".idea" --exclude="cmake-*" --delete || exit
+ssh "$user@$server" "/var/www/build/$module/scripts/run.sh"
 popd || exit

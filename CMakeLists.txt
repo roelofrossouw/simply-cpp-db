@@ -56,3 +56,16 @@ if (SC_DB_BUILD_TESTS)
     enable_testing()
     add_subdirectory(tests sc-db-test)
 endif ()
+
+############
+# Binaries #
+############
+
+add_executable(sc-demo-db apps/sc-demo-db.cpp)
+target_link_libraries(sc-demo-db PRIVATE sc::sc-db-shared)
+install(TARGETS sc-demo-db RUNTIME DESTINATION bin COMPONENT runtime)
+
+#############
+# Packaging #
+#############
+package_sc_module()
