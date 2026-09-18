@@ -1,0 +1,1 @@
+C++20 wrapper around libpq for PostgreSQL, other databases to follow
