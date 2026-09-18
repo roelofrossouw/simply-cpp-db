@@ -14,8 +14,9 @@ apt -y install cmake clang-tidy ccache g++
 
 pushd "/var/www/build/$module" || exit
 
-if [ -f pre-build.sh ]; then
+if [ -f scripts/pre-build.sh ]; then
     echo "Running pre-build"
+    ./scripts/pre-build.sh
 else
     echo "No pre-build required"
 fi
@@ -45,7 +46,7 @@ for deb in ../debs/*.deb; do
     [ -f "$deb" ] || continue
     echo "Loading $deb"
     reprepro includedeb $ubuntu_codename "$deb"
-    # mv "$deb" processed/
+    mv "$deb" ../debs/processed/
 done
 reprepro list $ubuntu_codename
 popd || exit
