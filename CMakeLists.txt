@@ -27,6 +27,10 @@ message(STATUS "SimplyCPP ${SC_MODULE} Version: ${SC_VERSION}")
 # hint is in cmake/sc-dbConfig.cmake.in for consumers of the installed package.
 if (APPLE AND NOT PostgreSQL_ROOT)
     execute_process(COMMAND pg_config --libdir OUTPUT_VARIABLE PostgreSQL_ROOT OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET)
+    # --libdir is the keg's lib/, not its root; find_package expects the root itself.
+    if (PostgreSQL_ROOT)
+        get_filename_component(PostgreSQL_ROOT "${PostgreSQL_ROOT}" DIRECTORY)
+    endif ()
 endif ()
 find_or_install_package(PostgreSQL postgresql-server-dev-all postgresql)
 
