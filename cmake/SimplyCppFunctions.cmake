@@ -21,7 +21,7 @@ endif ()
 # sc_bootstrap.cmake compares it against a module's own copy so an older installed
 # sc-core cannot quietly replace a newer one: a module built against helpers missing
 # what its CMakeLists.txt calls fails in ways that look nothing like the cause.
-set(SC_HELPERS_VERSION 9)
+set(SC_HELPERS_VERSION 14)
 set(SC_VERSION_FILE "VERSION.txt")
 set(SC_VERSION_DEFAULT "1.0.0")
 
@@ -128,6 +128,34 @@ macro(sc_find_package_any_case package)
     endif ()
 endmacro()
 
+# sc_ensure_package_source()
+#
+# Makes sure this machine can actually install our own simply-cpp-* packages
+# (simply-cpp-models, simply-cpp-onnxruntime, ...) before find_or_install_package()
+# tries to: taps roelofrossouw/sc on Homebrew, or registers the apt.roelof.co.za
+# repo on Ubuntu - the same single command documented for people setting a machine
+# up by hand, run automatically instead. Cheap to call repeatedly: it checks
+# locally first and only reaches out when the tap/repo isn't there yet, so this
+# adds no real cost for the (far more common) third-party packages that don't
+# need it at all.
+function(sc_ensure_package_source)
+    if (APPLE)
+        execute_process(COMMAND brew --repository OUTPUT_VARIABLE SC_BREW_REPO OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET)
+        if (NOT SC_BREW_REPO OR EXISTS "${SC_BREW_REPO}/Library/Taps/roelofrossouw/homebrew-sc")
+            return()
+        endif ()
+    elseif (UNIX AND EXISTS "/usr/bin/apt")
+        if (EXISTS "/etc/apt/sources.list.d/simply-cpp.list")
+            return()
+        endif ()
+    else ()
+        return()
+    endif ()
+
+    message(STATUS "Registering the simply-cpp package source")
+    execute_process(COMMAND bash -c "curl -fsSL https://apt.roelof.co.za/setup.sh | bash")
+endfunction()
+
 # find_or_install_package(<package> <apt name> <brew name> [COMPONENTS <component>...])
 #
 # Finds a dependency, installing it through the system package manager first if it is
@@ -150,6 +178,7 @@ macro(find_or_install_package package apt_name brew_name)
     find_package(${package} QUIET ${ARGN})
 
     if (NOT ${package}_FOUND)
+        sc_ensure_package_source()
         if (UNIX AND EXISTS "/usr/bin/apt")
             message(STATUS "${package} not found, attempting apt installation...")
             execute_process(COMMAND sudo apt -y install ${apt_name} RESULT_VARIABLE SC_PACKAGE_INSTALL_RESULT)
@@ -323,7 +352,14 @@ function(add_sc_libraries)
         target_link_libraries(${target} PUBLIC ${dependencies})
         list(APPEND SOURCE_LIBRARIES ${target})
         if (${kind} STREQUAL SHARED)
-            install(TARGETS ${target} LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR} COMPONENT runtime NAMELINK_COMPONENT development)
+            # EXPORT lives on this call, not install_sc_module()'s: that one only
+            # installs the static archive now (see its comment for why re-touching
+            # the shared library's real file there breaks things two different
+            # ways). A target's EXPORT info is generated from whichever call
+            # actually places its real file, so the shared target has to be
+            # exported from here - the one call that actually does that.
+            install(TARGETS ${target} EXPORT ${name}Targets
+                    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR} COMPONENT runtime NAMELINK_COMPONENT development)
         endif ()
     endforeach ()
 
@@ -357,7 +393,23 @@ function(install_sc_module)
 
     set(package_destination "${CMAKE_INSTALL_LIBDIR}/cmake/${name}")
 
-    install(TARGETS ${SOURCE_LIBRARIES} EXPORT ${name}Targets COMPONENT development)
+    # Only the static archive is installed here. The shared library is already
+    # fully installed - real file in COMPONENT runtime, namelink in development -
+    # by add_sc_libraries()'s own call, which also carries its EXPORT (a target's
+    # export info is generated from whichever install(TARGETS) call actually
+    # places its real file, so it has to be exported from there, not here). Two
+    # things were tried and both broke: a blanket "COMPONENT development" here
+    # re-installed the shared library's real .so a second time, into the -dev
+    # package too, which made dpkg refuse to unpack both packages together; a
+    # NAMELINK_ONLY re-declaration of it here (to carry EXPORT without
+    # re-placing the real file) instead dropped the shared target from the
+    # generated Targets.cmake entirely, since this call no longer referenced its
+    # real file for CMake to generate an IMPORTED_LOCATION from. Excluding it
+    # from this call altogether avoids both.
+    set(sc_static_libraries "${SOURCE_LIBRARIES}")
+    list(FILTER sc_static_libraries EXCLUDE REGEX "-shared$")
+    install(TARGETS ${sc_static_libraries} EXPORT ${name}Targets
+            ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR} COMPONENT development)
     # Finder litters include/ and install(DIRECTORY) copies whatever it finds.
     install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include/ COMPONENT development DESTINATION ${CMAKE_INSTALL_INCLUDEDIR} PATTERN ".DS_Store" EXCLUDE)
     install(EXPORT ${name}Targets FILE ${name}Targets.cmake NAMESPACE sc:: DESTINATION ${package_destination} COMPONENT development)
@@ -374,7 +426,24 @@ function(install_sc_module)
             DESTINATION ${package_destination} COMPONENT development)
 endfunction()
 
+# package_sc_module([DEPENDS <apt package>...] [DEVELOPMENT_DEPENDS <apt package>...])
+#
+# DEPENDS lists other apt packages this module's own Depends: needs beyond
+# what CPACK_DEBIAN_PACKAGE_SHLIBDEPS finds on its own - it only sees a
+# dependency that dpkg already tracks as belonging to some package, so a
+# simply-cpp-* dependency found via an untracked local install (or a purely
+# static one whose symbols got embedded rather than dynamically linked) is
+# invisible to it regardless of whether the code actually needs it at
+# runtime. Applied to both the runtime and development components, since
+# both currently carry the actual shared library.
+#
+# DEVELOPMENT_DEPENDS adds further apt packages only to the -dev component's
+# Depends:. Use it for a *-dev package (e.g. libopencv-dev) that a consumer's
+# own find_package()/find_dependency() call needs at configure time to locate
+# a dependency's CMake config - installing that on a runtime-only machine
+# would be pointless, since nothing there ever calls find_package().
 function(package_sc_module)
+    cmake_parse_arguments(ARG "" "" "DEPENDS;DEVELOPMENT_DEPENDS" ${ARGN})
     if (APPLE)
         set(CODENAME apple)
         set(CPACK_GENERATOR "TGZ")
@@ -409,6 +478,20 @@ function(package_sc_module)
     set(CPACK_DEBIAN_RUNTIME_PACKAGE_SECTION "utils")
     set(CPACK_DEBIAN_DEVELOPMENT_PACKAGE_SECTION "devel")
     set(CPACK_DEBIAN_LIBRARY_PACKAGE_SECTION "libs")
+    if (ARG_DEPENDS)
+        string(REPLACE ";" ", " ARG_DEPENDS_LIST "${ARG_DEPENDS}")
+        set(CPACK_DEBIAN_RUNTIME_PACKAGE_DEPENDS "${ARG_DEPENDS_LIST}")
+        set(CPACK_DEBIAN_DEVELOPMENT_PACKAGE_DEPENDS "${ARG_DEPENDS_LIST}")
+    endif ()
+    if (ARG_DEVELOPMENT_DEPENDS)
+        string(REPLACE ";" ", " ARG_DEVELOPMENT_DEPENDS_LIST "${ARG_DEVELOPMENT_DEPENDS}")
+        if (CPACK_DEBIAN_DEVELOPMENT_PACKAGE_DEPENDS)
+            set(CPACK_DEBIAN_DEVELOPMENT_PACKAGE_DEPENDS
+                    "${CPACK_DEBIAN_DEVELOPMENT_PACKAGE_DEPENDS}, ${ARG_DEVELOPMENT_DEPENDS_LIST}")
+        else ()
+            set(CPACK_DEBIAN_DEVELOPMENT_PACKAGE_DEPENDS "${ARG_DEVELOPMENT_DEPENDS_LIST}")
+        endif ()
+    endif ()
     include(CPack)
 endfunction()
 
