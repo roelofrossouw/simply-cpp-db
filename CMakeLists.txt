@@ -14,16 +14,28 @@ message(STATUS "SimplyCPP ${SC_MODULE} Version: ${SC_VERSION}")
 ################
 
 ## Postgres ##
-# pg_config knows where a brew keg landed, find_package on its own does not. The same
-# hint is in cmake/sc-dbConfig.cmake.in for consumers of the installed package.
+# Homebrew keeps libpq keg-only, so FindPostgreSQL cannot find it in the default
+# search paths. Use the exact locations from the matching pg_config.
 if (APPLE AND NOT PostgreSQL_ROOT)
-    execute_process(COMMAND pg_config --libdir OUTPUT_VARIABLE PostgreSQL_ROOT OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET)
-    # --libdir is the keg's lib/, not its root; find_package expects the root itself.
-    if (PostgreSQL_ROOT)
-        get_filename_component(PostgreSQL_ROOT "${PostgreSQL_ROOT}" DIRECTORY)
+    execute_process(COMMAND pg_config --libdir
+            OUTPUT_VARIABLE SC_DB_POSTGRESQL_LIBDIR OUTPUT_STRIP_TRAILING_WHITESPACE
+            ERROR_QUIET RESULT_VARIABLE SC_DB_PG_CONFIG_LIBDIR_RESULT)
+    execute_process(COMMAND pg_config --includedir
+            OUTPUT_VARIABLE SC_DB_POSTGRESQL_INCLUDEDIR OUTPUT_STRIP_TRAILING_WHITESPACE
+            ERROR_QUIET RESULT_VARIABLE SC_DB_PG_CONFIG_INCLUDEDIR_RESULT)
+
+    if (SC_DB_PG_CONFIG_LIBDIR_RESULT EQUAL 0 AND NOT PostgreSQL_LIBRARY)
+        find_library(SC_DB_LIBPQ_LIBRARY NAMES pq PATHS "${SC_DB_POSTGRESQL_LIBDIR}" NO_DEFAULT_PATH NO_CACHE)
+        if (SC_DB_LIBPQ_LIBRARY)
+            set(PostgreSQL_LIBRARY "${SC_DB_LIBPQ_LIBRARY}")
+        endif ()
+    endif ()
+    if (SC_DB_PG_CONFIG_INCLUDEDIR_RESULT EQUAL 0 AND NOT PostgreSQL_INCLUDE_DIR
+            AND EXISTS "${SC_DB_POSTGRESQL_INCLUDEDIR}/libpq-fe.h")
+        set(PostgreSQL_INCLUDE_DIR "${SC_DB_POSTGRESQL_INCLUDEDIR}")
     endif ()
 endif ()
-find_or_install_package(PostgreSQL postgresql-server-dev-all libpq)
+find_or_install_package(PostgreSQL libpq-dev libpq)
 
 ###########
 # Objects #
