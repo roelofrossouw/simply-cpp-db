@@ -51,7 +51,7 @@ target_link_libraries(myapp PRIVATE sc::sc-db)
 
 sc-db does **not** depend on `simply-cpp` (sc-core) or any other `sc-*` module - it only needs PostgreSQL:
 
-- **PostgreSQL** - `postgresql-server-dev-all` on apt, `postgresql` on brew; installed automatically if missing when building from source. On macOS this uses whichever Postgres keg `pg_config` resolves to.
+- **PostgreSQL client library (libpq)** - `postgresql-server-dev-all` on apt, `libpq` on brew; installed automatically if missing when building from source. The Homebrew dependency is the client-only package, avoiding a full PostgreSQL server install. On macOS this uses whichever Postgres keg `pg_config` resolves to.
 
 ## Usage
 

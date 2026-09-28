@@ -23,7 +23,7 @@ if (APPLE AND NOT PostgreSQL_ROOT)
         get_filename_component(PostgreSQL_ROOT "${PostgreSQL_ROOT}" DIRECTORY)
     endif ()
 endif ()
-find_or_install_package(PostgreSQL postgresql-server-dev-all postgresql)
+find_or_install_package(PostgreSQL postgresql-server-dev-all libpq)
 
 ###########
 # Objects #
