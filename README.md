@@ -63,7 +63,7 @@ target_link_libraries(myapp PRIVATE sc::sc-db)
 ```
 
 ```cpp
-#include <postgres.h>
+#include <sc_postgres.h>
 #include <iostream>
 
 int main() {
