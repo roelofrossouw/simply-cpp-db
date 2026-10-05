@@ -40,11 +40,11 @@ find_or_install_package(PostgreSQL libpq-dev libpq)
 ###########
 # Objects #
 ###########
-set(SOURCE_OBJECTS include/sc_postgres.h)
+set(SOURCE_OBJECTS include/postgres.h)
 set(SOURCE_LIBRARIES)
 set(SOURCE_LINK_LIBRARIES)
 
-add_sc_object(sc_postgres LINK_LIBRARIES PostgreSQL::PostgreSQL PUBLIC_LINK_LIBRARIES PostgreSQL::PostgreSQL)
+add_sc_object(postgres LINK_LIBRARIES PostgreSQL::PostgreSQL PUBLIC_LINK_LIBRARIES PostgreSQL::PostgreSQL)
 
 ######################
 # Exported Libraries #
