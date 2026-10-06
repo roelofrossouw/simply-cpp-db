@@ -1,4 +1,4 @@
-#include <sc_postgres.h>
+#include <postgres.h>
 
 #include <cstdlib>
 #include <stdexcept>
