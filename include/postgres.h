@@ -1,5 +1,4 @@
-#ifndef SC_POSTGRES_H
-#define SC_POSTGRES_H
+#pragma once
 
 #include <string>
 #include <vector>
@@ -23,5 +22,3 @@ namespace sc {
         pg::postgres *impl;
     };
 } // sc
-
-#endif //SC_POSTGRES_H

@@ -1,5 +1,5 @@
 #include <iostream>
-#include <sc_postgres.h>
+#include <postgres.h>
 
 using namespace std;
 
