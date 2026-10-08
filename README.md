@@ -78,6 +78,11 @@ int main() {
 }
 ```
 
+Every argument is optional. Anything left empty is up to libpq's own defaults,
+so the standard `PGHOST`, `PGPORT`, `PGDATABASE`, `PGUSER` and `PGPASSWORD`
+variables (and `~/.pgpass`) apply, and `sc::postgres db;` connects purely from
+them. Explicit arguments win over the environment.
+
 The first argument is an `sc::ip_endpoints`, so it can be a `host[:port]`
 string, several separated by `;`, a `std::vector<sc::ip_endpoint>` or a braced
 list. With several servers libpq connects to the first one that answers; a
@@ -94,16 +99,17 @@ sc::postgres listed({{"db1", 5432}, {"db2", 5433}}, "dbname", "user", "password"
 check a machine can reach PostgreSQL without installing the `-dev` package:
 
 ```bash
-sc-db-demo                                              # 127.0.0.1:5432
-SC_DB_DEMO_SERVER="db1.example.com;db2.example.com:5433" sc-db-demo
+PGDATABASE=mydb PGUSER=me sc-db-demo                    # PGHOST, or the local socket
+SC_DB_DEMO_SERVER="db1.example.com;db2.example.com:5433" PGDATABASE=mydb PGUSER=me sc-db-demo
 ```
 
 `SC_DB_DEMO_SERVER` holds one server or several, separated by `;` (quote the
-value in a shell); they are tried in order. When it's unset or empty the demo
-uses `127.0.0.1:5432`; an invalid value is an error. The database, user and password come from
-`SC_DB_DEMO_DBNAME`, `SC_DB_DEMO_USER` and `SC_DB_DEMO_PASSWORD` (default `1web`,
-`www` and none). The `example-sc-db-demo` CTest uses the same variables, which
-build servers get from `/etc/simply-cpp/test.env`.
+value in a shell); they are tried in order, and an invalid value is an error.
+Everything else comes from the standard libpq environment: `PGDATABASE`,
+`PGUSER` and `PGPASSWORD` (or `~/.pgpass`), plus `PGHOST`/`PGPORT` (or the local
+socket) when `SC_DB_DEMO_SERVER` is unset or empty. The `example-sc-db-demo`
+CTest uses the same variables, which build servers get from
+`/etc/simply-cpp/test.env`.
 
 Its source is `examples/sc-db-demo.cpp`; the code below is copied from it at
 configure time, so it always matches code that compiles:
@@ -111,7 +117,7 @@ configure time, so it always matches code that compiles:
 <!-- sc-example: examples/sc-db-demo.cpp -->
 ```cpp
 sc::timer sw;
-const sc::postgres db{servers, name, user, password};
+const sc::postgres db{servers};  // database, user and password from PGDATABASE etc.
 std::cout << "Connected after " << sw << '\n';
 
 const auto rows = db.exec("select current_database() as database, current_user as user, version() as version");
