@@ -1,33 +1,24 @@
 // Connects to PostgreSQL and runs a query that needs no schema.
 // Servers come from SC_DB_DEMO_SERVER: one server, or several separated by ';'
-// ("db1:5432;db2:5433"), tried in order. Unset or invalid falls back to 127.0.0.1:5432.
+// ("db1:5432;db2:5433"), tried in order. Unset or empty falls back to 127.0.0.1:5432;
+// an invalid value is an error.
 // The database, user and password come from SC_DB_DEMO_DBNAME, SC_DB_DEMO_USER and
 // SC_DB_DEMO_PASSWORD, defaulting to 1web, www and no password.
 
-#include <demo_servers.h>
+#include <core.h>
+#include <ip_endpoints.h>
 #include <postgres.h>
 #include <timer.h>
 
-#include <cstdlib>
 #include <iostream>
-#include <string>
-
-namespace {
-    std::string setting(const char *variable, const char *fallback) {
-        const char *value = std::getenv(variable);
-        return value && *value ? value : fallback;
-    }
-}
 
 int main() {
     try {
-        const auto servers = sc::demo_servers("SC_DB_DEMO_SERVER", 5432);
-        const auto name = setting("SC_DB_DEMO_DBNAME", "1web");
-        const auto user = setting("SC_DB_DEMO_USER", "www");
-        const auto password = setting("SC_DB_DEMO_PASSWORD", "");
-        std::cout << "PostgreSQL servers:";
-        for (const auto &server : servers) std::cout << ' ' << server;
-        std::cout << '\n';
+        const sc::ip_endpoints servers{sc::getenv("SC_DB_DEMO_SERVER", "127.0.0.1"), 5432};
+        const auto name = sc::getenv("SC_DB_DEMO_DBNAME", "1web");
+        const auto user = sc::getenv("SC_DB_DEMO_USER", "www");
+        const auto password = sc::getenv("SC_DB_DEMO_PASSWORD");
+        std::cout << "PostgreSQL servers: " << servers << '\n';
 
         // [readme]
         sc::timer sw;
