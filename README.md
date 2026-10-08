@@ -99,8 +99,8 @@ SC_DB_DEMO_SERVER="db1.example.com;db2.example.com:5433" sc-db-demo
 ```
 
 `SC_DB_DEMO_SERVER` holds one server or several, separated by `;` (quote the
-value in a shell); they are tried in order. When it's unset or invalid the demo
-falls back to `127.0.0.1:5432`. The database, user and password come from
+value in a shell); they are tried in order. When it's unset or empty the demo
+uses `127.0.0.1:5432`; an invalid value is an error. The database, user and password come from
 `SC_DB_DEMO_DBNAME`, `SC_DB_DEMO_USER` and `SC_DB_DEMO_PASSWORD` (default `1web`,
 `www` and none). The `example-sc-db-demo` CTest uses the same variables, which
 build servers get from `/etc/simply-cpp/test.env`.
