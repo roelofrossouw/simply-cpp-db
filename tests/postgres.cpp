@@ -1,3 +1,4 @@
+#include <core.h>
 #include <postgres.h>
 
 #include <cstdlib>
@@ -12,13 +13,6 @@
 using namespace std;
 
 namespace {
-    // The live checks run against whatever server these point at, so a different
-    // machine can redirect them without editing the test.
-    string setting(const char *name, const char *fallback) {
-        const char *value = getenv(name);
-        return value && *value ? value : fallback;
-    }
-
     bool has_field(const map<string, string> &row, const string &field) { return row.find(field) != row.end(); }
 
     // Sets libpq environment variables for one scope, restoring the previous values after.
@@ -67,10 +61,12 @@ int main() {
 
     SECTION("Live server");
     {
-        const auto host = setting("SC_DB_TEST_HOST", "devdb");
-        const auto name = setting("SC_DB_TEST_NAME", "1web");
-        const auto user = setting("SC_DB_TEST_USER", "www");
-        const auto password = setting("SC_DB_TEST_PASSWORD", "");
+        // The live checks run against whatever the standard libpq variables point at, so a
+        // different machine can redirect them without editing the test.
+        const auto host = sc::getenv("PGHOST", "devdb");
+        const auto name = sc::getenv("PGDATABASE", "1web");
+        const auto user = sc::getenv("PGUSER", "www");
+        const auto password = sc::getenv("PGPASSWORD");
 
         bool reachable = true;
         try {
@@ -81,7 +77,7 @@ int main() {
 
         if (!reachable) {
             cout << "   (no PostgreSQL at " << user << '@' << host << '/' << name
-                 << ", live checks not run - set SC_DB_TEST_HOST etc. to redirect)" << endl;
+                 << ", live checks not run - set PGHOST, PGDATABASE, PGUSER and PGPASSWORD to redirect)" << endl;
         } else {
             const sc::postgres db{host, name, user, password};
 
