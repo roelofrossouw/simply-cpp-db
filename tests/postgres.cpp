@@ -119,6 +119,10 @@ int main() {
             const sc::postgres failover{{{"no-such-host.invalid", 5432}, {host, 0}}, name, user, password};
             const auto via_list = failover.exec("select 1 as one");
             CHECK_EQ(via_list.size(), size_t{1});
+
+            // The same as one ';'-separated string.
+            const sc::postgres from_string{"no-such-host.invalid;" + host, name, user, password};
+            CHECK_EQ(from_string.exec("select 1 as one").size(), size_t{1});
         }
     }
 

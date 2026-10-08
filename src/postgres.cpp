@@ -97,12 +97,6 @@ namespace sc {
         };
     }
 
-    postgres::postgres(std::string host, std::string db, std::string user, std::string passwd) {
-        // Concatenated rather than std::format: libstdc++ only ships <format> from
-        // GCC 13, and Ubuntu jammy is still on GCC 11.
-        impl = new pg::postgres("host=" + host + " dbname=" + db + " user=" + user + " password=" + passwd);
-    }
-
     namespace {
         // A libpq connection string value, quoted so spaces, quotes and backslashes survive.
         std::string conninfo_value(const std::string &value) {
@@ -115,7 +109,7 @@ namespace sc {
         }
     }
 
-    postgres::postgres(const std::vector<ip_endpoint> &servers, const std::string &db, const std::string &user,
+    postgres::postgres(const ip_endpoints &servers, const std::string &db, const std::string &user,
                        const std::string &passwd) {
         if (servers.empty()) throw std::invalid_argument{"postgres needs at least one server"};
         std::string hosts;
