@@ -99,15 +99,15 @@ sc::postgres listed({{"db1", 5432}, {"db2", 5433}}, "dbname", "user", "password"
 check a machine can reach PostgreSQL without installing the `-dev` package:
 
 ```bash
-PGDATABASE=mydb PGUSER=me sc-db-demo                    # PGHOST, or the local socket
-SC_DB_DEMO_SERVER="db1.example.com;db2.example.com:5433" PGDATABASE=mydb PGUSER=me sc-db-demo
+PGDATABASE=mydb PGUSER=me sc-db-demo                    # local socket
+PGHOST=db1.example.com,db2.example.com PGPORT=5432,5433 PGDATABASE=mydb PGUSER=me sc-db-demo
 ```
 
-`SC_DB_DEMO_SERVER` holds one server or several, separated by `;` (quote the
-value in a shell); they are tried in order, and an invalid value is an error.
-Everything else comes from the standard libpq environment: `PGDATABASE`,
-`PGUSER` and `PGPASSWORD` (or `~/.pgpass`), plus `PGHOST`/`PGPORT` (or the local
-socket) when `SC_DB_DEMO_SERVER` is unset or empty. The `example-sc-db-demo`
+Unlike the other demos it has no `SC_DB_DEMO_SERVER`: everything comes from the
+standard libpq environment, `PGHOST` and `PGPORT` (or the local socket),
+`PGDATABASE`, `PGUSER` and `PGPASSWORD` (or `~/.pgpass`). For several servers,
+libpq takes comma-separated `PGHOST` and `PGPORT` lists and tries them in order.
+It runs a query with a parameter (`$1`), passed separately from the SQL. The `example-sc-db-demo`
 CTest uses the same variables, which build servers get from
 `/etc/simply-cpp/test.env`.
 
@@ -117,12 +117,19 @@ configure time, so it always matches code that compiles:
 <!-- sc-example: examples/sc-db-demo.cpp -->
 ```cpp
 sc::timer sw;
-const sc::postgres db{servers};  // database, user and password from PGDATABASE etc.
+const sc::postgres db; // database, user and password from PGDATABASE etc.
 std::cout << "Connected after " << sw << '\n';
 
-const auto rows = db.exec("select current_database() as database, current_user as user, version() as version");
-for (const auto &row : rows) {
-    for (const auto &[field, value] : row) std::cout << field << " = " << value << '\n';
+const std::string query = R"(
+    select current_database() as database,
+           current_user as user,
+           version() as version,
+           $1::text as param1
+)";
+const auto rows = db.exec(query, {"First Parameter"});
+for (const auto &row: rows) {
+    for (const auto &[field, value]: row)
+        std::cout << field << " = " << value << '\n';
 }
 std::cout << "Done after " << sw << '\n';
 ```

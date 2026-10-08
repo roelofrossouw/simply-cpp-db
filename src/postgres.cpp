@@ -89,10 +89,10 @@ namespace sc {
 
             result exec(const std::string &query, const std::vector<std::string> &params) {
                 if (params.empty()) return result{PQexec(conn.get(), query.c_str()), conn.get()};
-                std::vector<char *> strings;
-                strings.reserve(params.size());
-                for (int i{}; i < params.size(); i++) strings[i] = const_cast<char *>(params[i].c_str());
-                return result{PQexecParams(conn.get(), query.c_str(), params.size(), nullptr, strings.data(), nullptr, nullptr, 0), conn.get()};
+                std::vector<const char *> values;
+                values.reserve(params.size());
+                for (const auto &param: params) values.push_back(param.c_str());
+                return result{PQexecParams(conn.get(), query.c_str(), static_cast<int>(values.size()), nullptr, values.data(), nullptr, nullptr, 0), conn.get()};
             }
         };
     }

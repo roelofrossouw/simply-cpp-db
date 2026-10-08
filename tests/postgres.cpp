@@ -119,6 +119,15 @@ int main() {
             CHECK_EQ(injected.size(), size_t{1});
             if (injected.size() == 1) CHECK_EQ(injected[0].at("value"), string{"'; drop table person; --"});
 
+            // Several parameters, each in its own place.
+            const auto several = db.exec("select $1::text as a, $2::int + 1 as b, $3::text as c", {"x", "41", "z"});
+            CHECK_EQ(several.size(), size_t{1});
+            if (several.size() == 1) {
+                CHECK_EQ(several[0].at("a"), string{"x"});
+                CHECK_EQ(several[0].at("b"), string{"42"});
+                CHECK_EQ(several[0].at("c"), string{"z"});
+            }
+
             // Nulls come back as empty strings.
             const auto nulls = db.exec("select null::text as nothing");
             CHECK_EQ(nulls.size(), size_t{1});
