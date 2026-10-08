@@ -103,6 +103,36 @@ namespace sc {
         impl = new pg::postgres("host=" + host + " dbname=" + db + " user=" + user + " password=" + passwd);
     }
 
+    namespace {
+        // A libpq connection string value, quoted so spaces, quotes and backslashes survive.
+        std::string conninfo_value(const std::string &value) {
+            std::string quoted = "'";
+            for (const char c: value) {
+                if (c == '\'' || c == '\\') quoted += '\\';
+                quoted += c;
+            }
+            return quoted + '\'';
+        }
+    }
+
+    postgres::postgres(const std::vector<ip_endpoint> &servers, const std::string &db, const std::string &user,
+                       const std::string &passwd) {
+        if (servers.empty()) throw std::invalid_argument{"postgres needs at least one server"};
+        std::string hosts;
+        std::string ports;
+        for (const auto &server: servers) {
+            if (!hosts.empty()) {
+                hosts += ',';
+                ports += ',';
+            }
+            hosts += server.host;
+            if (server.port) ports += std::to_string(server.port);
+        }
+        impl = new pg::postgres("host=" + conninfo_value(hosts) + " port=" + conninfo_value(ports) +
+                                " dbname=" + conninfo_value(db) + " user=" + conninfo_value(user) +
+                                " password=" + conninfo_value(passwd));
+    }
+
     postgres::~postgres() {
         delete impl;
     }

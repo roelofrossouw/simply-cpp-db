@@ -78,6 +78,47 @@ int main() {
 }
 ```
 
+To fail over between servers, pass a list of `sc::ip_endpoint`s; libpq connects
+to the first one that answers (port 0 means the default port):
+
+```cpp
+sc::postgres db({{"db1", 5432}, {"db2", 5433}}, "dbname", "user", "password");
+```
+
+## Demo
+
+`sc-db-demo` is installed with the runtime package (`simply-cpp-db`), so you can
+check a machine can reach PostgreSQL without installing the `-dev` package:
+
+```bash
+sc-db-demo                                              # 127.0.0.1:5432
+SC_DB_DEMO_SERVER="db1.example.com;db2.example.com:5433" sc-db-demo
+```
+
+`SC_DB_DEMO_SERVER` holds one server or several, separated by `;` (quote the
+value in a shell); they are tried in order. When it's unset or invalid the demo
+falls back to `127.0.0.1:5432`. The database, user and password come from
+`SC_DB_DEMO_DBNAME`, `SC_DB_DEMO_USER` and `SC_DB_DEMO_PASSWORD` (default `1web`,
+`www` and none). The `example-sc-db-demo` CTest uses the same variables, which
+build servers get from `/etc/simply-cpp/test.env`.
+
+Its source is `examples/sc-db-demo.cpp`; the code below is copied from it at
+configure time, so it always matches code that compiles:
+
+<!-- sc-example: examples/sc-db-demo.cpp -->
+```cpp
+sc::timer sw;
+const sc::postgres db{servers, name, user, password};
+std::cout << "Connected after " << sw << '\n';
+
+const auto rows = db.exec("select current_database() as database, current_user as user, version() as version");
+for (const auto &row : rows) {
+    for (const auto &[field, value] : row) std::cout << field << " = " << value << '\n';
+}
+std::cout << "Done after " << sw << '\n';
+```
+<!-- /sc-example -->
+
 ## Requirements
 
 - CMake 3.22 or newer
