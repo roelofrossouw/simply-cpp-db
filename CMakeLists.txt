@@ -19,10 +19,13 @@ find_or_install_package(sc-core simply-cpp-dev simply-cpp 1.5.5)
 # Homebrew keeps libpq keg-only, so FindPostgreSQL cannot find it in the default
 # search paths. Use the exact locations from the matching pg_config.
 if (APPLE AND NOT PostgreSQL_ROOT)
-    execute_process(COMMAND pg_config --libdir
+    # libpq's keg-only bin directory is only on PATH if a shell profile adds it, so also look
+    # where Homebrew installs it (Apple silicon, then Intel).
+    find_program(SC_DB_PG_CONFIG pg_config HINTS /opt/homebrew/opt/libpq/bin /usr/local/opt/libpq/bin NO_CACHE)
+    execute_process(COMMAND "${SC_DB_PG_CONFIG}" --libdir
             OUTPUT_VARIABLE SC_DB_POSTGRESQL_LIBDIR OUTPUT_STRIP_TRAILING_WHITESPACE
             ERROR_QUIET RESULT_VARIABLE SC_DB_PG_CONFIG_LIBDIR_RESULT)
-    execute_process(COMMAND pg_config --includedir
+    execute_process(COMMAND "${SC_DB_PG_CONFIG}" --includedir
             OUTPUT_VARIABLE SC_DB_POSTGRESQL_INCLUDEDIR OUTPUT_STRIP_TRAILING_WHITESPACE
             ERROR_QUIET RESULT_VARIABLE SC_DB_PG_CONFIG_INCLUDEDIR_RESULT)
 
