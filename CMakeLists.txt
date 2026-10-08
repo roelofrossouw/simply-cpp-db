@@ -13,6 +13,8 @@ message(STATUS "SimplyCPP ${SC_MODULE} Version: ${SC_VERSION}")
 # Dependencies #
 ################
 
+find_or_install_package(sc-core simply-cpp-dev simply-cpp 1.5.2)
+
 ## Postgres ##
 # Homebrew keeps libpq keg-only, so FindPostgreSQL cannot find it in the default
 # search paths. Use the exact locations from the matching pg_config.
@@ -44,7 +46,7 @@ set(SOURCE_OBJECTS include/postgres.h)
 set(SOURCE_LIBRARIES)
 set(SOURCE_LINK_LIBRARIES)
 
-add_sc_object(postgres LINK_LIBRARIES PostgreSQL::PostgreSQL PUBLIC_LINK_LIBRARIES PostgreSQL::PostgreSQL)
+add_sc_object(postgres LINK_LIBRARIES PostgreSQL::PostgreSQL PUBLIC_LINK_LIBRARIES sc::sc-core PostgreSQL::PostgreSQL)
 
 ######################
 # Exported Libraries #
@@ -65,14 +67,11 @@ if (SC_DB_BUILD_TESTS)
 endif ()
 
 ############
-# Binaries #
+# Examples #
 ############
-
-add_executable(sc-demo-db apps/sc-demo-db.cpp)
-target_link_libraries(sc-demo-db PRIVATE sc::sc-db-shared)
-install(TARGETS sc-demo-db RUNTIME DESTINATION bin COMPONENT runtime)
+add_sc_example(sc-db-demo RUN_AS_TEST)
 
 #############
 # Packaging #
 #############
-package_sc_module()
+package_sc_module(DEV_DEPENDS "simply-cpp-dev (>= 1.5.2)" libpq-dev)

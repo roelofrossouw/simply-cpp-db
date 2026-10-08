@@ -36,6 +36,11 @@ int main() {
         } catch (const runtime_error &error) {
             CHECK(!string{error.what()}.empty());
         }
+
+        // The same through the server-list constructor, which also needs at least one server.
+        CHECK_THROWS_AS((sc::postgres{vector<sc::ip_endpoint>{}, "postgres", "postgres"}), invalid_argument);
+        CHECK_THROWS_AS((sc::postgres{{{"no-such-host.invalid", 5432}, {"also-no-such-host.invalid", 0}},
+                                      "postgres", "postgres"}), runtime_error);
     }
 
     SECTION("Live server");
@@ -109,6 +114,11 @@ int main() {
             // The connection survives a failed query.
             const auto after = db.exec("select 1 as one");
             CHECK_EQ(after.size(), size_t{1});
+
+            // A server list fails over past a server that can't be reached.
+            const sc::postgres failover{{{"no-such-host.invalid", 5432}, {host, 0}}, name, user, password};
+            const auto via_list = failover.exec("select 1 as one");
+            CHECK_EQ(via_list.size(), size_t{1});
         }
     }
 
