@@ -111,20 +111,37 @@ namespace sc {
 
     postgres::postgres(const ip_endpoints &servers, const std::string &db, const std::string &user,
                        const std::string &passwd) {
-        if (servers.empty()) throw std::invalid_argument{"postgres needs at least one server"};
         std::string hosts;
         std::string ports;
+        bool any_port = false;
         for (const auto &server: servers) {
             if (!hosts.empty()) {
                 hosts += ',';
                 ports += ',';
             }
             hosts += server.host;
-            if (server.port) ports += std::to_string(server.port);
+            if (server.port) {
+                ports += std::to_string(server.port);
+                any_port = true;
+            }
         }
-        impl = new pg::postgres("host=" + conninfo_value(hosts) + " port=" + conninfo_value(ports) +
-                                " dbname=" + conninfo_value(db) + " user=" + conninfo_value(user) +
-                                " password=" + conninfo_value(passwd));
+
+        // An empty value is left out rather than passed as '', which would stop libpq falling
+        // back to its environment variables (PGHOST, PGPORT, PGDATABASE, PGUSER, PGPASSWORD).
+        std::string conninfo;
+        const auto add = [&conninfo](const char *keyword, const std::string &value) {
+            if (value.empty()) return;
+            if (!conninfo.empty()) conninfo += ' ';
+            conninfo += keyword;
+            conninfo += '=';
+            conninfo += conninfo_value(value);
+        };
+        add("host", hosts);
+        if (any_port) add("port", ports);
+        add("dbname", db);
+        add("user", user);
+        add("password", passwd);
+        impl = new pg::postgres(conninfo);
     }
 
     postgres::~postgres() {

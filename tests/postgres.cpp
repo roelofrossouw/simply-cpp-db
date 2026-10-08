@@ -1,6 +1,8 @@
 #include <postgres.h>
 
 #include <cstdlib>
+#include <optional>
+#include <utility>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -18,6 +20,27 @@ namespace {
     }
 
     bool has_field(const map<string, string> &row, const string &field) { return row.find(field) != row.end(); }
+
+    // Sets libpq environment variables for one scope, restoring the previous values after.
+    class pg_environment {
+        vector<pair<string, optional<string> > > saved_;
+
+    public:
+        explicit pg_environment(const vector<pair<string, string> > &values) {
+            for (const auto &[name, value]: values) {
+                const char *old = getenv(name.c_str());
+                saved_.emplace_back(name, old ? optional<string>{old} : nullopt);
+                setenv(name.c_str(), value.c_str(), 1);
+            }
+        }
+
+        ~pg_environment() {
+            for (const auto &[name, value]: saved_) {
+                if (value) setenv(name.c_str(), value->c_str(), 1);
+                else unsetenv(name.c_str());
+            }
+        }
+    };
 }
 
 int main() {
@@ -37,8 +60,7 @@ int main() {
             CHECK(!string{error.what()}.empty());
         }
 
-        // The same through the server-list constructor, which also needs at least one server.
-        CHECK_THROWS_AS((sc::postgres{vector<sc::ip_endpoint>{}, "postgres", "postgres"}), invalid_argument);
+        // The same through a server list.
         CHECK_THROWS_AS((sc::postgres{{{"no-such-host.invalid", 5432}, {"also-no-such-host.invalid", 0}},
                                       "postgres", "postgres"}), runtime_error);
     }
@@ -119,6 +141,31 @@ int main() {
             const sc::postgres failover{{{"no-such-host.invalid", 5432}, {host, 0}}, name, user, password};
             const auto via_list = failover.exec("select 1 as one");
             CHECK_EQ(via_list.size(), size_t{1});
+
+            // Anything not given comes from libpq's environment variables.
+            {
+                const pg_environment environment{{{"PGHOST", host}, {"PGDATABASE", name}, {"PGUSER", user}}};
+                const auto who = "select current_database() as db, current_user as usr";
+                const sc::postgres from_environment;
+                const auto all = from_environment.exec(who);
+                CHECK_EQ(all.size(), size_t{1});
+                if (all.size() == 1) {
+                    CHECK_EQ(all[0].at("db"), name);
+                    CHECK_EQ(all[0].at("usr"), user);
+                }
+                // A server given, database and user still from the environment.
+                const sc::postgres server_only{host};
+                CHECK_EQ(server_only.exec(who).size(), size_t{1});
+            }
+            {
+                // An explicit value wins over the environment.
+                const pg_environment environment{{{"PGDATABASE", "sc_db_test_no_such_database"}}};
+                const sc::postgres explicit_db{host, name, user, password};
+                const auto current = explicit_db.exec("select current_database() as db");
+                CHECK_EQ(current.size(), size_t{1});
+                if (current.size() == 1) CHECK_EQ(current[0].at("db"), name);
+                CHECK_THROWS_AS((sc::postgres{host, "", user, password}), runtime_error);
+            }
 
             // The same as one ';'-separated string.
             const sc::postgres from_string{"no-such-host.invalid;" + host, name, user, password};
