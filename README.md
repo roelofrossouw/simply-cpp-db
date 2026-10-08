@@ -78,11 +78,14 @@ int main() {
 }
 ```
 
-To fail over between servers, pass a list of `sc::ip_endpoint`s; libpq connects
-to the first one that answers (port 0 means the default port):
+The first argument is an `sc::ip_endpoints`, so it can be a `host[:port]`
+string, several separated by `;`, a `std::vector<sc::ip_endpoint>` or a braced
+list. With several servers libpq connects to the first one that answers; a
+server without a port uses the default port:
 
 ```cpp
-sc::postgres db({{"db1", 5432}, {"db2", 5433}}, "dbname", "user", "password");
+sc::postgres db("db1;db2:5433", "dbname", "user", "password");
+sc::postgres listed({{"db1", 5432}, {"db2", 5433}}, "dbname", "user", "password");
 ```
 
 ## Demo
