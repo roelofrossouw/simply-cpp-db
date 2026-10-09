@@ -1,5 +1,5 @@
 #include <core.h>
-#include <postgres.h>
+#include <pgsql.h>
 
 #include <cstdlib>
 #include <optional>

@@ -42,8 +42,8 @@ if (APPLE AND NOT PostgreSQL_ROOT)
 endif ()
 find_or_install_package(PostgreSQL libpq-dev libpq)
 # libpq needs only the client headers. With postgresql-server-dev installed (as for sc-pglib),
-# FindPostgreSQL also adds the server's include directory, whose own postgres.h then hides
-# sc-db's: #include <postgres.h> found PostgreSQL's, and sc::postgres was undeclared.
+# FindPostgreSQL also adds the server's include directory, with PostgreSQL's own headers in it.
+# (Why sc-db's header is pgsql.h: as postgres.h, PostgreSQL's postgres.h could hide it.)
 if (TARGET PostgreSQL::PostgreSQL AND PostgreSQL_INCLUDE_DIR)
     set_property(TARGET PostgreSQL::PostgreSQL PROPERTY INTERFACE_INCLUDE_DIRECTORIES "${PostgreSQL_INCLUDE_DIR}")
 endif ()
@@ -51,11 +51,11 @@ endif ()
 ###########
 # Objects #
 ###########
-set(SOURCE_OBJECTS include/postgres.h)
+set(SOURCE_OBJECTS include/pgsql.h)
 set(SOURCE_LIBRARIES)
 set(SOURCE_LINK_LIBRARIES)
 
-add_sc_object(postgres LINK_LIBRARIES PostgreSQL::PostgreSQL PUBLIC_LINK_LIBRARIES sc::sc-core PostgreSQL::PostgreSQL)
+add_sc_object(pgsql LINK_LIBRARIES PostgreSQL::PostgreSQL PUBLIC_LINK_LIBRARIES sc::sc-core PostgreSQL::PostgreSQL)
 
 ######################
 # Exported Libraries #

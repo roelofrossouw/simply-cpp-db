@@ -8,7 +8,7 @@
 
 #include <sc.h>
 
-#include <postgres.h>
+#include <pgsql.h>
 
 int main() {
     try {
