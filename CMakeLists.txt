@@ -72,7 +72,7 @@ endif ()
 ############
 # Examples #
 ############
-add_sc_example(sc-db-demo RUN_AS_TEST)
+add_sc_example(sc-db-demo)
 
 #############
 # Packaging #

@@ -95,8 +95,10 @@ sc::postgres listed({{"db1", 5432}, {"db2", 5433}}, "dbname", "user", "password"
 
 ## Demo
 
-`sc-db-demo` is installed with the runtime package (`simply-cpp-db`), so you can
-check a machine can reach PostgreSQL without installing the `-dev` package:
+`sc-db-demo` shows the connection settings it uses, connects, and runs a query
+with a parameter and one returning several rows, showing each call with what it
+returned. It is installed with the runtime package (`simply-cpp-db`), so it also
+checks a machine can reach PostgreSQL without the `-dev` package:
 
 ```bash
 PGDATABASE=mydb PGUSER=me sc-db-demo                    # local socket
@@ -107,31 +109,25 @@ Unlike the other demos it has no `SC_DB_DEMO_SERVER`: everything comes from the
 standard libpq environment, `PGHOST` and `PGPORT` (or the local socket),
 `PGDATABASE`, `PGUSER` and `PGPASSWORD` (or `~/.pgpass`). For several servers,
 libpq takes comma-separated `PGHOST` and `PGPORT` lists and tries them in order.
-It runs a query with a parameter (`$1`), passed separately from the SQL. The `example-sc-db-demo`
-CTest uses the same variables, which build servers get from
-`/etc/simply-cpp/test.env`.
+Parameters (`$1`) are passed separately from the SQL. It is a demonstration, not
+a test, so CTest doesn't run it.
 
 Its source is `examples/sc-db-demo.cpp`; the code below is copied from it at
 configure time, so it always matches code that compiles:
 
 <!-- sc-example: examples/sc-db-demo.cpp -->
 ```cpp
-sc::timer sw;
-const sc::postgres db; // database, user and password from PGDATABASE etc.
-std::cout << "Connected after " << sw << '\n';
+heading("Connecting");
+const sc::postgres db; // host, database, user and password from PGHOST etc.
+std::cout << "  const sc::postgres db;\n      -> connected in " << sw << '\n';
 
-const std::string query = R"(
-    select current_database() as database,
-           current_user as user,
-           version() as version,
-           $1::text as param1
-)";
-const auto rows = db.exec(query, {"First Parameter"});
-for (const auto &row: rows) {
-    for (const auto &[field, value]: row)
-        std::cout << field << " = " << value << '\n';
-}
-std::cout << "Done after " << sw << '\n';
+heading("A query with a parameter ($1 is passed separately, never pasted into the SQL)");
+const std::string query = "select current_database() as database, current_user as user, "
+                          "$1::text as greeting";
+SHOW(db.exec(query, {"Hello World!"}));
+
+heading("Several rows");
+SHOW(db.exec("select * from (values (1, 'one'), (2, 'two'), (3, 'three')) as t(number, name)"));
 ```
 <!-- /sc-example -->
 
