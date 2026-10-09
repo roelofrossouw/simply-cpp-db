@@ -62,8 +62,11 @@ add_executable(myapp main.cpp)
 target_link_libraries(myapp PRIVATE sc::sc-db)
 ```
 
+The header is `pgsql.h`. Before 1.2.0 it was `postgres.h`, the name of one of
+PostgreSQL's own headers, which could be found instead of it.
+
 ```cpp
-#include <postgres.h>
+#include <pgsql.h>
 #include <iostream>
 
 int main() {
