@@ -41,6 +41,12 @@ if (APPLE AND NOT PostgreSQL_ROOT)
     endif ()
 endif ()
 find_or_install_package(PostgreSQL libpq-dev libpq)
+# libpq needs only the client headers. With postgresql-server-dev installed (as for sc-pglib),
+# FindPostgreSQL also adds the server's include directory, whose own postgres.h then hides
+# sc-db's: #include <postgres.h> found PostgreSQL's, and sc::postgres was undeclared.
+if (TARGET PostgreSQL::PostgreSQL AND PostgreSQL_INCLUDE_DIR)
+    set_property(TARGET PostgreSQL::PostgreSQL PROPERTY INTERFACE_INCLUDE_DIRECTORIES "${PostgreSQL_INCLUDE_DIR}")
+endif ()
 
 ###########
 # Objects #
