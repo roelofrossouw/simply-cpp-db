@@ -117,17 +117,17 @@ configure time, so it always matches code that compiles:
 
 <!-- sc-example: examples/sc-db-demo.cpp -->
 ```cpp
-heading("Connecting");
+sc::console::heading("Connecting");
 const sc::postgres db; // host, database, user and password from PGHOST etc.
-std::cout << "  const sc::postgres db;\n      -> connected in " << sw << '\n';
+sc::console::show_text("const sc::postgres db;", "connected in " + std::string(sw));
 
-heading("A query with a parameter ($1 is passed separately, never pasted into the SQL)");
+sc::console::heading("A query with a parameter ($1 is passed separately, never pasted into the SQL)");
 const std::string query = "select current_database() as database, current_user as user, "
                           "$1::text as greeting";
-SHOW(db.exec(query, {"Hello World!"}));
+SC_SHOW(db.exec(query, {"Hello World!"}));
 
-heading("Several rows");
-SHOW(db.exec("select * from (values (1, 'one'), (2, 'two'), (3, 'three')) as t(number, name)"));
+sc::console::heading("Several rows");
+SC_SHOW(db.exec("select * from (values (1, 'one'), (2, 'two'), (3, 'three')) as t(number, name)"));
 ```
 <!-- /sc-example -->
 

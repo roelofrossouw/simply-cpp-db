@@ -13,7 +13,7 @@ message(STATUS "SimplyCPP ${SC_MODULE} Version: ${SC_VERSION}")
 # Dependencies #
 ################
 
-find_or_install_package(sc-core simply-cpp-dev simply-cpp 1.5.5)
+find_or_install_package(sc-core simply-cpp-dev simply-cpp 1.5.11)
 
 ## Postgres ##
 # Homebrew keeps libpq keg-only, so FindPostgreSQL cannot find it in the default
