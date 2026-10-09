@@ -7,60 +7,33 @@
 #include <postgres.h>
 
 #include <iostream>
-#include <map>
 #include <string>
-#include <string_view>
-#include <vector>
-
-namespace {
-    using rows = std::vector<std::map<std::string, std::string>>;
-
-    // One step of the demo: the call, as written in the source, and the rows it returned.
-    void show(const std::string_view call, const rows &result) {
-        std::cout << "  " << call << "\n      -> " << result.size() << (result.size() == 1 ? " row" : " rows") << '\n';
-        for (const auto &row: result) {
-            std::cout << "         {";
-            bool first = true;
-            for (const auto &[field, value]: row) {
-                std::cout << (first ? "" : ", ") << field << ": \"" << value << '"';
-                first = false;
-            }
-            std::cout << "}\n";
-        }
-    }
-
-    void heading(const std::string_view title) { std::cout << '\n' << title << '\n'; }
-
-    void setting(const char *variable) {
-        std::cout << "  " << variable << '=' << sc::getenv(variable, "(not set)") << '\n';
-    }
-}
-
-#define SHOW(expression) show(#expression, expression)
 
 int main() {
     try {
-        std::cout << "simply-cpp db: querying PostgreSQL, each call with what it returned\n"
-                  << "Connection settings, from libpq's environment:\n";
-        for (const char *variable: {"PGHOST", "PGPORT", "PGDATABASE", "PGUSER"}) setting(variable);
-        std::cout << "  PGPASSWORD " << (sc::getenv("PGPASSWORD").empty() ? "(not set)" : "is set") << '\n';
+        sc::console::title("simply-cpp db: querying PostgreSQL, each call with what it returned");
+        sc::console::output() << "Connection settings, from libpq's environment:\n";
+        for (const char *variable: {"PGHOST", "PGPORT", "PGDATABASE", "PGUSER"}) {
+            sc::console::note(std::string{variable} + '=' + sc::getenv(variable, "(not set)"));
+        }
+        sc::console::note(sc::getenv("PGPASSWORD").empty() ? "PGPASSWORD (not set)" : "PGPASSWORD is set");
         sc::timer sw;
 
         // [readme]
-        heading("Connecting");
+        sc::console::heading("Connecting");
         const sc::postgres db; // host, database, user and password from PGHOST etc.
-        std::cout << "  const sc::postgres db;\n      -> connected in " << sw << '\n';
+        sc::console::show_text("const sc::postgres db;", "connected in " + std::string(sw));
 
-        heading("A query with a parameter ($1 is passed separately, never pasted into the SQL)");
+        sc::console::heading("A query with a parameter ($1 is passed separately, never pasted into the SQL)");
         const std::string query = "select current_database() as database, current_user as user, "
                                   "$1::text as greeting";
-        SHOW(db.exec(query, {"Hello World!"}));
+        SC_SHOW(db.exec(query, {"Hello World!"}));
 
-        heading("Several rows");
-        SHOW(db.exec("select * from (values (1, 'one'), (2, 'two'), (3, 'three')) as t(number, name)"));
+        sc::console::heading("Several rows");
+        SC_SHOW(db.exec("select * from (values (1, 'one'), (2, 'two'), (3, 'three')) as t(number, name)"));
         // [/readme]
 
-        std::cout << "\nAll of that took " << sw << ".\n";
+        sc::console::output() << "\nAll of that took " << sw << ".\n";
     } catch (const std::exception &error) {
         std::cerr << "sc-db-demo: " << error.what() << '\n';
         return 1;
