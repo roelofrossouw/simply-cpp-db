@@ -3,11 +3,12 @@
 // Everything comes from the standard libpq environment: PGHOST and PGPORT (or the local
 // socket), PGDATABASE, PGUSER and PGPASSWORD (or ~/.pgpass).
 
-#include <sc.h>
-#include <postgres.h>
-
 #include <iostream>
 #include <string>
+
+#include <sc.h>
+
+#include <postgres.h>
 
 int main() {
     try {
