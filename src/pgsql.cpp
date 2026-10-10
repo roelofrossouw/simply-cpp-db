@@ -2,6 +2,7 @@
 
 #include <libpq-fe.h>
 #include <stdexcept>
+#include <utility>
 
 namespace sc {
     namespace pg {
@@ -148,7 +149,19 @@ namespace sc {
         delete impl;
     }
 
+    postgres::postgres(postgres &&other) noexcept : impl(std::exchange(other.impl, nullptr)) {
+    }
+
+    postgres &postgres::operator=(postgres &&other) noexcept {
+        if (this != &other) {
+            delete impl;
+            impl = std::exchange(other.impl, nullptr);
+        }
+        return *this;
+    }
+
     std::vector<std::map<std::string, std::string> > postgres::exec(const std::string &query, const std::vector<std::string> &parameters) const {
+        if (!impl) throw std::logic_error("sc::postgres: exec() on a connection that was moved from");
         const auto res = impl->exec(query, parameters);
         if (!res.row_count()) return {};
 

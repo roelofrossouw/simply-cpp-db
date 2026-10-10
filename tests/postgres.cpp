@@ -6,6 +6,7 @@
 #include <utility>
 #include <stdexcept>
 #include <string>
+#include <type_traits>
 #include <vector>
 
 #include <sc_test.h>
@@ -38,6 +39,16 @@ namespace {
 }
 
 int main() {
+    SECTION("A connection moves but doesn't copy");
+    {
+        // A copy would share one libpq connection and free it twice.
+        static_assert(!std::is_copy_constructible_v<sc::postgres>);
+        static_assert(!std::is_copy_assignable_v<sc::postgres>);
+        static_assert(std::is_nothrow_move_constructible_v<sc::postgres>);
+        static_assert(std::is_nothrow_move_assignable_v<sc::postgres>);
+        CHECK(true);
+    }
+
     SECTION("A connection that cannot be made is reported, not returned broken");
     {
         // No server on this host, or a server without that database: either way the
@@ -79,6 +90,16 @@ int main() {
             cout << "   (no PostgreSQL at " << user << '@' << host << '/' << name
                  << ", live checks not run - set PGHOST, PGDATABASE, PGUSER and PGPASSWORD to redirect)" << endl;
         } else {
+            // Moved, the connection keeps working; the moved-from object refuses to be used.
+            sc::postgres first{host, name, user, password};
+            sc::postgres moved{std::move(first)};
+            const auto two = moved.exec("select 2 as two");
+            CHECK_EQ(two.at(0).at("two"), string{"2"});
+            CHECK_THROWS_AS(first.exec("select 1"), logic_error);
+            first = std::move(moved);
+            const auto three = first.exec("select 3 as three");
+            CHECK_EQ(three.at(0).at("three"), string{"3"});
+
             const sc::postgres db{host, name, user, password};
 
             // A single row, addressed by column alias.
