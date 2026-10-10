@@ -25,9 +25,16 @@ namespace sc {
 
         ~postgres();
 
+        // A connection can be moved but not copied. A moved-from postgres throws std::logic_error
+        // from exec().
+        postgres(const postgres &) = delete;
+        postgres &operator=(const postgres &) = delete;
+        postgres(postgres &&other) noexcept;
+        postgres &operator=(postgres &&other) noexcept;
+
         std::vector<std::map<std::string, std::string> > exec(const std::string &query, const std::vector<std::string> &parameters = {}) const;
 
     private :
-        pg::postgres *impl;
+        pg::postgres *impl = nullptr;
     };
 } // sc
