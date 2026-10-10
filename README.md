@@ -20,33 +20,6 @@ curl -fsSL https://apt.roelof.co.za/setup.sh | bash # registers the apt repo - s
 sudo apt -y install simply-cpp-db-dev
 ```
 
-### CMake FetchContent
-
-```cmake
-include(FetchContent)
-FetchContent_Declare(
-        sc-db
-        GIT_REPOSITORY https://github.com/roelofrossouw/simply-cpp-db.git
-        GIT_TAG main # or a specific tag, e.g. v1.0.5, to stay stable
-        GIT_SHALLOW TRUE
-)
-FetchContent_MakeAvailable(sc-db)
-
-add_executable(myapp main.cpp)
-target_link_libraries(myapp PRIVATE sc::sc-db)
-```
-
-### Git submodule
-
-```bash
-git submodule add https://github.com/roelofrossouw/simply-cpp-db.git third_party/sc-db
-```
-
-```cmake
-add_subdirectory(third_party/sc-db)
-target_link_libraries(myapp PRIVATE sc::sc-db)
-```
-
 ## Dependencies
 
 sc-db does **not** depend on `simply-cpp` (sc-core) or any other `sc-*` module - it only needs PostgreSQL:
@@ -147,3 +120,9 @@ cmake -B build -S .
 cmake --build build -j
 ctest --test-dir build --output-on-failure
 ```
+
+## Other ways to use it
+
+The packages above are the simplest route. sc-db can also be built from source, with
+CMake's `FetchContent` or as a git submodule (`add_subdirectory`), from
+https://github.com/roelofrossouw/simply-cpp-db.
