@@ -2,6 +2,8 @@
 
 C++20 wrapper around libpq for PostgreSQL, other databases to follow.
 
+**Documentation:** the [simply-cpp wiki](https://github.com/roelofrossouw/simply-cpp/wiki) has a [database guide](https://github.com/roelofrossouw/simply-cpp/wiki/Database) and the [sc-db reference](https://github.com/roelofrossouw/simply-cpp/wiki/Reference-sc-db), plus [getting started](https://github.com/roelofrossouw/simply-cpp/wiki/Getting-Started) for the whole suite.
+
 The public API uses the `sc` namespace, in the same style as `simply-cpp`.
 
 ## Install
