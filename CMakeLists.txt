@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.22)
 set(SC_MODULE db)
-project(simply-cpp-${SC_MODULE} LANGUAGES CXX)
+project(simply-cpp-${SC_MODULE} HOMEPAGE_URL "https://github.com/roelofrossouw/simply-cpp-db" LANGUAGES CXX)
 include(cmake/sc_bootstrap.cmake)
 
 # Options:
@@ -13,7 +13,7 @@ message(STATUS "SimplyCPP ${SC_MODULE} Version: ${SC_VERSION}")
 # Dependencies #
 ################
 
-find_or_install_package(sc-core simply-cpp-dev simply-cpp 1.5.21)
+find_or_install_package(sc-core simply-cpp-dev simply-cpp 1.7.0)
 
 ## Postgres ##
 # Homebrew keeps libpq keg-only, so FindPostgreSQL cannot find it in the default
@@ -83,4 +83,4 @@ add_sc_example(sc-db-demo)
 #############
 # Packaging #
 #############
-package_sc_module(DEV_DEPENDS "simply-cpp-dev (>= 1.5.21~)" libpq-dev)
+package_sc_module(DEV_DEPENDS "simply-cpp-dev (>= 1.7.0~)" libpq-dev)
