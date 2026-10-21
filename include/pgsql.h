@@ -5,11 +5,12 @@
 #include <string>
 #include <vector>
 #include <map>
+#include <memory>
 
 
 namespace sc {
     namespace pg {
-        class postgres;
+        class connection;
     }
 
     class postgres {
@@ -35,6 +36,6 @@ namespace sc {
         std::vector<std::map<std::string, std::string> > exec(const std::string &query, const std::vector<std::string> &parameters = {}) const;
 
     private :
-        pg::postgres *impl = nullptr;
+        std::unique_ptr<pg::connection> impl;
     };
 } // sc
