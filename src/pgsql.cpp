@@ -1,100 +1,33 @@
 #include "pgsql.h"
 
 #include <libpq-fe.h>
+#include <memory>
 #include <stdexcept>
-#include <utility>
 
 namespace sc {
     namespace pg {
+        using result = std::unique_ptr<PGresult, decltype(&PQclear)>;
+
         class connection {
-            PGconn *conn_ = nullptr;
-
         public:
-            explicit connection(const std::string &conninfo) {
-                conn_ = PQconnectdb(conninfo.c_str());
-                if (PQstatus(conn_) != CONNECTION_OK) {
-                    throw std::runtime_error{PQerrorMessage(conn_)};
+            explicit connection(const std::string &conninfo) : conn_{PQconnectdb(conninfo.c_str()), &PQfinish} {
+                if (PQstatus(conn_.get()) != CONNECTION_OK) {
+                    throw std::runtime_error{PQerrorMessage(conn_.get())};
                 }
             }
 
-            ~connection() noexcept {
-                if (conn_) {
-                    PQfinish(conn_);
-                    conn_ = nullptr;
-                }
-            }
-
-            // Prevent copying/moving for safety
-            connection(const connection &) = delete;
-
-            connection &operator=(const connection &) = delete;
-
-            PGconn *get() const noexcept { return conn_; }
-        };
-
-        class result {
-        private:
-            void get_metadata() {
-                if (!is_ok()) {
-                    throw std::runtime_error{error_msg()};
-                }
-                rows = PQntuples(res_);
-                fields = PQnfields(res_);
-                fieldname.reserve(fields);
-                for (int i{}; i < fields; ++i) fieldname.emplace_back(PQfname(res_, i));
-            }
-
-        public:
-            explicit result(PGresult *res, PGconn *conn) : res_{res}, conn_(conn) { get_metadata(); }
-
-            ~result() noexcept { if (res_) { PQclear(res_); } }
-
-            // Transfer ownership, clear in destructor
-            result &operator=(PGresult *new_res) noexcept {
-                if (res_) PQclear(res_);
-                res_ = new_res;
-                get_metadata();
-                return *this;
-            }
-
-            bool is_ok() const noexcept {
-                return res_ && (PQresultStatus(res_) == PGRES_TUPLES_OK || PQresultStatus(res_) == PGRES_COMMAND_OK);
-            }
-
-            std::string error_msg() const noexcept {
-                return res_ ? std::string{PQerrorMessage(conn_)} : "No result";
-            }
-
-            int row_count() const { return rows; }
-
-            int field_count() const { return fields; }
-
-            std::string field_name(const int field_num) const { return fieldname[field_num]; }
-
-            std::string value(int row, int fieldnum) const { return PQgetvalue(res_, row, fieldnum); }
-
-        private:
-            PGresult *res_ = nullptr;
-            PGconn *conn_ = nullptr;
-            int rows;
-            int fields;
-            std::vector<std::string> fieldname{};
-        };
-
-        class postgres {
-        public:
-            explicit postgres(std::string conninfo) : conn(conninfo) {
-            }
-
-            connection conn;
-
-            result exec(const std::string &query, const std::vector<std::string> &params) {
-                if (params.empty()) return result{PQexec(conn.get(), query.c_str()), conn.get()};
+            result exec(const std::string &query, const std::vector<std::string> &params) const {
+                if (params.empty()) return {PQexec(conn_.get(), query.c_str()), &PQclear};
                 std::vector<const char *> values;
                 values.reserve(params.size());
                 for (const auto &param: params) values.push_back(param.c_str());
-                return result{PQexecParams(conn.get(), query.c_str(), static_cast<int>(values.size()), nullptr, values.data(), nullptr, nullptr, 0), conn.get()};
+                return {PQexecParams(conn_.get(), query.c_str(), static_cast<int>(values.size()), nullptr, values.data(), nullptr, nullptr, 0), &PQclear};
             }
+
+            std::string error_message() const { return PQerrorMessage(conn_.get()); }
+
+        private:
+            std::unique_ptr<PGconn, decltype(&PQfinish)> conn_;
         };
     }
 
@@ -142,35 +75,34 @@ namespace sc {
         add("dbname", db);
         add("user", user);
         add("password", passwd);
-        impl = new pg::postgres(conninfo);
+        impl = std::make_unique<pg::connection>(conninfo);
     }
 
-    postgres::~postgres() {
-        delete impl;
-    }
+    postgres::~postgres() = default;
 
-    postgres::postgres(postgres &&other) noexcept : impl(std::exchange(other.impl, nullptr)) {
-    }
+    postgres::postgres(postgres &&other) noexcept = default;
 
-    postgres &postgres::operator=(postgres &&other) noexcept {
-        if (this != &other) {
-            delete impl;
-            impl = std::exchange(other.impl, nullptr);
-        }
-        return *this;
-    }
+    postgres &postgres::operator=(postgres &&other) noexcept = default;
 
     std::vector<std::map<std::string, std::string> > postgres::exec(const std::string &query, const std::vector<std::string> &parameters) const {
         if (!impl) throw std::logic_error("sc::postgres: exec() on a connection that was moved from");
         const auto res = impl->exec(query, parameters);
-        if (!res.row_count()) return {};
+        if (!res) throw std::runtime_error{"No result"};
+        const auto status = PQresultStatus(res.get());
+        if (status != PGRES_TUPLES_OK && status != PGRES_COMMAND_OK) throw std::runtime_error{impl->error_message()};
 
-        std::vector<std::map<std::string, std::string> > result(res.row_count());
-        for (int i = 0; i < res.row_count(); ++i) {
-            for (int j = 0; j < res.field_count(); ++j) {
-                result[i][res.field_name(j)] = res.value(i, j);
+        const int rows = PQntuples(res.get());
+        const int fields = PQnfields(res.get());
+        std::vector<std::string> names;
+        names.reserve(fields);
+        for (int j = 0; j < fields; ++j) names.emplace_back(PQfname(res.get(), j));
+
+        std::vector<std::map<std::string, std::string> > result(rows);
+        for (int i = 0; i < rows; ++i) {
+            for (int j = 0; j < fields; ++j) {
+                result[i][names[j]] = PQgetvalue(res.get(), i, j);
             }
         }
-        return std::move(result);
+        return result;
     }
 } // sc
