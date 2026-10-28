@@ -20,9 +20,11 @@ namespace sc {
         // Anything left empty is up to libpq's own defaults: no servers means PGHOST/PGPORT (or
         // the local socket), a server without a port means PGPORT (or 5432), and an empty db, user
         // or passwd means PGDATABASE, PGUSER and PGPASSWORD (or ~/.pgpass). So sc::postgres db;
-        // connects purely from the standard libpq environment.
+        // connects purely from the standard libpq environment. options are further libpq keywords
+        // and their values, such as {{"connect_timeout", "3"}, {"sslmode", "require"}} (an empty
+        // value is left out, as above).
         explicit postgres(const ip_endpoints &servers = {}, const std::string &db = {}, const std::string &user = {},
-                          const std::string &passwd = {});
+                          const std::string &passwd = {}, const std::map<std::string, std::string> &options = {});
 
         ~postgres();
 

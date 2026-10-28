@@ -1,6 +1,8 @@
 #include "pgsql.h"
 
 #include <libpq-fe.h>
+#include <algorithm>
+#include <cctype>
 #include <memory>
 #include <stdexcept>
 
@@ -44,7 +46,7 @@ namespace sc {
     }
 
     postgres::postgres(const ip_endpoints &servers, const std::string &db, const std::string &user,
-                       const std::string &passwd) {
+                       const std::string &passwd, const std::map<std::string, std::string> &options) {
         std::string hosts;
         std::string ports;
         bool any_port = false;
@@ -63,7 +65,7 @@ namespace sc {
         // An empty value is left out rather than passed as '', which would stop libpq falling
         // back to its environment variables (PGHOST, PGPORT, PGDATABASE, PGUSER, PGPASSWORD).
         std::string conninfo;
-        const auto add = [&conninfo](const char *keyword, const std::string &value) {
+        const auto add = [&conninfo](const std::string &keyword, const std::string &value) {
             if (value.empty()) return;
             if (!conninfo.empty()) conninfo += ' ';
             conninfo += keyword;
@@ -75,6 +77,11 @@ namespace sc {
         add("dbname", db);
         add("user", user);
         add("password", passwd);
+        for (const auto &[keyword, value]: options) {
+            if (keyword.empty() || !std::ranges::all_of(keyword, [](const char c) { return std::islower(static_cast<unsigned char>(c)) || c == '_'; }))
+                throw std::invalid_argument{"sc::postgres: \"" + keyword + "\" isn't a libpq keyword"};
+            add(keyword, value);
+        }
         impl = std::make_unique<pg::connection>(conninfo);
     }
 

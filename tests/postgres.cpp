@@ -1,6 +1,7 @@
 #include <core.h>
 #include <pgsql.h>
 
+#include <chrono>
 #include <cstdlib>
 #include <optional>
 #include <utility>
@@ -68,6 +69,17 @@ int main() {
         // The same through a server list.
         CHECK_THROWS_AS((sc::postgres{{{"no-such-host.invalid", 5432}, {"also-no-such-host.invalid", 0}},
                                       "postgres", "postgres"}), runtime_error);
+    }
+
+    SECTION("Further libpq keywords");
+    {
+        // Passed on to libpq: an unknown one is libpq's error, a malformed one ours.
+        CHECK_THROWS_AS((sc::postgres{"127.0.0.1", "postgres", "postgres", {}, {{"no_such_keyword", "1"}}}), runtime_error);
+        CHECK_THROWS_AS((sc::postgres{"127.0.0.1", "postgres", "postgres", {}, {{"connect_timeout=1 host", "x"}}}), invalid_argument);
+        // A limit on connecting: an address nothing answers on gives up within it.
+        const auto started = std::chrono::steady_clock::now();
+        CHECK_THROWS_AS((sc::postgres{"10.255.255.1", "postgres", "postgres", {}, {{"connect_timeout", "2"}}}), runtime_error);
+        CHECK(std::chrono::steady_clock::now() - started < std::chrono::seconds{10});
     }
 
     SECTION("Live server");

@@ -71,6 +71,13 @@ sc::postgres db("db1;db2:5433", "dbname", "user", "password");
 sc::postgres listed({{"db1", 5432}, {"db2", 5433}}, "dbname", "user", "password");
 ```
 
+Further libpq keywords go in a fifth argument, such as a limit on connecting or
+the TLS mode:
+
+```cpp
+sc::postgres quick("db1", "dbname", "user", {}, {{"connect_timeout", "3"}, {"sslmode", "require"}});
+```
+
 ## Demo
 
 `sc-db-demo` shows the connection settings it uses, connects, and runs a query
