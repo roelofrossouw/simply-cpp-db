@@ -78,6 +78,19 @@ the TLS mode:
 sc::postgres quick("db1", "dbname", "user", {}, {{"connect_timeout", "3"}, {"sslmode", "require"}});
 ```
 
+A connection that LISTENs waits for NOTIFY with `wait_notification()`: the next
+notification within the time given, or nothing. It throws when the connection
+is lost; connect again and LISTEN again to carry on.
+
+```cpp
+db.exec("listen jobs");
+while (running) {
+    if (const auto got = db.wait_notification(std::chrono::seconds{60})) {
+        std::cout << got->channel << ": " << got->payload << "\n";
+    }
+}
+```
+
 ## Demo
 
 `sc-db-demo` shows the connection settings it uses, connects, and runs a query

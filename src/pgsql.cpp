@@ -1,8 +1,11 @@
 #include "pgsql.h"
 
 #include <libpq-fe.h>
+#include <poll.h>
 #include <algorithm>
 #include <cctype>
+#include <cerrno>
+#include <cstring>
 #include <memory>
 #include <stdexcept>
 
@@ -27,6 +30,20 @@ namespace sc {
             }
 
             std::string error_message() const { return PQerrorMessage(conn_.get()); }
+
+            // The next notification libpq has read already, if any.
+            std::optional<postgres::notification> next_notification() const {
+                const std::unique_ptr<PGnotify, decltype(&PQfreemem)> got{PQnotifies(conn_.get()), &PQfreemem};
+                if (!got) return std::nullopt;
+                return postgres::notification{got->relname, got->extra ? got->extra : "", got->be_pid};
+            }
+
+            // Reads what the server sent; throws when the connection is lost.
+            void consume() const {
+                if (!PQconsumeInput(conn_.get())) throw std::runtime_error{"sc::postgres: " + error_message()};
+            }
+
+            int socket() const { return PQsocket(conn_.get()); }
 
         private:
             std::unique_ptr<PGconn, decltype(&PQfinish)> conn_;
@@ -111,5 +128,28 @@ namespace sc {
             }
         }
         return result;
+    }
+
+    std::optional<postgres::notification> postgres::wait_notification(const std::chrono::milliseconds timeout) const {
+        if (!impl) throw std::logic_error("sc::postgres: wait_notification() on a connection that was moved from");
+        impl->consume();
+        if (auto got = impl->next_notification()) return got;
+
+        const auto until = std::chrono::steady_clock::now() + timeout;
+        for (;;) {
+            const auto left = std::chrono::duration_cast<std::chrono::milliseconds>(until - std::chrono::steady_clock::now());
+            if (left.count() <= 0) return std::nullopt;
+            const int socket = impl->socket();
+            if (socket < 0) throw std::runtime_error{"sc::postgres: the connection is lost"};
+            pollfd wait{socket, POLLIN, 0};
+            const int ready = ::poll(&wait, 1, static_cast<int>(left.count()));
+            if (ready < 0) {
+                if (errno == EINTR) continue;
+                throw std::runtime_error{std::string{"sc::postgres: poll: "} + std::strerror(errno)};
+            }
+            if (ready == 0) return std::nullopt;
+            impl->consume();
+            if (auto got = impl->next_notification()) return got;
+        }
     }
 } // sc

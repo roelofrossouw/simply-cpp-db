@@ -205,6 +205,35 @@ int main() {
                 CHECK_THROWS_AS((sc::postgres{host, "", user, password}), runtime_error);
             }
 
+            // LISTEN on one connection, NOTIFY from another: the notification arrives, then none.
+            {
+                const sc::postgres listener{host, name, user, password};
+                const sc::postgres sender{host, name, user, password};
+                listener.exec("listen sc_db_test_channel");
+                CHECK(!listener.wait_notification(chrono::milliseconds{50}));
+                sender.exec("select pg_notify('sc_db_test_channel', 'hello')");
+                const auto got = listener.wait_notification(chrono::seconds{5});
+                CHECK(got.has_value());
+                if (got) {
+                    CHECK_EQ(got->channel, string{"sc_db_test_channel"});
+                    CHECK_EQ(got->payload, string{"hello"});
+                    CHECK(got->pid != 0);
+                }
+                // Two sent before waiting: both kept, in order.
+                sender.exec("select pg_notify('sc_db_test_channel', 'one'), pg_notify('sc_db_test_channel', 'two')");
+                const auto first_of_two = listener.wait_notification(chrono::seconds{5});
+                const auto second_of_two = listener.wait_notification(chrono::seconds{5});
+                CHECK(first_of_two && first_of_two->payload == "one");
+                CHECK(second_of_two && second_of_two->payload == "two");
+                const auto started = chrono::steady_clock::now();
+                CHECK(!listener.wait_notification(chrono::milliseconds{200}));
+                CHECK(chrono::steady_clock::now() - started >= chrono::milliseconds{190});
+                // A lost connection throws (a role may end its own sessions).
+                const auto pid = listener.exec("select pg_backend_pid() as pid").at(0).at("pid");
+                sender.exec("select pg_terminate_backend($1::int)", {pid});
+                CHECK_THROWS_AS((void) listener.wait_notification(chrono::seconds{5}), runtime_error);
+            }
+
             // The same as one ';'-separated string.
             const sc::postgres from_string{"no-such-host.invalid;" + host, name, user, password};
             CHECK_EQ(from_string.exec("select 1 as one").size(), size_t{1});

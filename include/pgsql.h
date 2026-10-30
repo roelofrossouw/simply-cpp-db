@@ -2,10 +2,12 @@
 
 #include <ip_endpoints.h>
 
+#include <chrono>
 #include <string>
 #include <vector>
 #include <map>
 #include <memory>
+#include <optional>
 
 
 namespace sc {
@@ -36,6 +38,18 @@ namespace sc {
         postgres &operator=(postgres &&other) noexcept;
 
         std::vector<std::map<std::string, std::string> > exec(const std::string &query, const std::vector<std::string> &parameters = {}) const;
+
+        // A NOTIFY on a channel this connection LISTENs to (exec("listen my_channel")).
+        struct notification {
+            std::string channel;
+            std::string payload;
+            int pid = 0; // the server process that sent it
+        };
+
+        // The next notification: one already received, or the first to come within timeout;
+        // nothing when none came. Throws std::runtime_error when the connection is lost (a new
+        // postgres, LISTEN again, is the way back).
+        std::optional<notification> wait_notification(std::chrono::milliseconds timeout) const;
 
     private :
         std::unique_ptr<pg::connection> impl;
