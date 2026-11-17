@@ -41,7 +41,7 @@ The header is `pgsql.h`. Before 1.2.0 it was `postgres.h`, the name of one of
 PostgreSQL's own headers, which could be found instead of it.
 
 ```cpp
-#include <pgsql.h>
+#include <sc/db/pgsql.h>
 #include <iostream>
 
 int main() {

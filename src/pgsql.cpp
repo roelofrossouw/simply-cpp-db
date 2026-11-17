@@ -1,4 +1,4 @@
-#include "pgsql.h"
+#include <sc/db/pgsql.h>
 
 #include <libpq-fe.h>
 #include <poll.h>

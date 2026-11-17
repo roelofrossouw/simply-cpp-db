@@ -6,9 +6,9 @@
 #include <iostream>
 #include <string>
 
-#include <sc.h>
+#include <sc/core/sc.h>
 
-#include <pgsql.h>
+#include <sc/db/pgsql.h>
 
 int main() {
     try {

@@ -1,6 +1,6 @@
 #pragma once
 
-#include <ip_endpoints.h>
+#include <sc/core/ip_endpoints.h>
 
 #include <chrono>
 #include <string>
