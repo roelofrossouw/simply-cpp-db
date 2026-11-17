@@ -3,7 +3,7 @@
 include(CMakeFindDependencyMacro)
 
 # pgsql.h uses sc::ip_endpoints.
-find_dependency(sc-core 1.5.5)
+find_dependency(sc-core 3.0.0)
 
 # sc-db links PostgreSQL publicly, so a consumer needs that imported target as well.
 # Homebrew keeps libpq keg-only; use the exact locations from pg_config.
