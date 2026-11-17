@@ -86,9 +86,9 @@ int main() {
     {
         // The live checks run against whatever the standard libpq variables point at, so a
         // different machine can redirect them without editing the test.
-        const auto host = sc::getenv("PGHOST", "devdb");
-        const auto name = sc::getenv("PGDATABASE", "1web");
-        const auto user = sc::getenv("PGUSER", "www");
+        const auto host = sc::getenv("PGHOST", "localhost");
+        const auto name = sc::getenv("PGDATABASE", "postgres");
+        const auto user = sc::getenv("PGUSER", "postgres");
         const auto password = sc::getenv("PGPASSWORD");
 
         bool reachable = true;
