@@ -43,7 +43,7 @@ endif ()
 find_or_install_package(PostgreSQL libpq-dev libpq)
 # libpq needs only the client headers. With postgresql-server-dev installed (as for sc-pglib),
 # FindPostgreSQL also adds the server's include directory, with PostgreSQL's own headers in it.
-# (Why sc-db's header is pgsql.h: as postgres.h, PostgreSQL's postgres.h could hide it.)
+# (sc-db's header is sc/db/db.h, pgsql.h until 3.0.0; as postgres.h, PostgreSQL's postgres.h could hide it.)
 if (TARGET PostgreSQL::PostgreSQL AND PostgreSQL_INCLUDE_DIR)
     set_property(TARGET PostgreSQL::PostgreSQL PROPERTY INTERFACE_INCLUDE_DIRECTORIES "${PostgreSQL_INCLUDE_DIR}")
 endif ()
@@ -51,11 +51,11 @@ endif ()
 ###########
 # Objects #
 ###########
-set(SOURCE_OBJECTS include/sc/db/pgsql.h)
+set(SOURCE_OBJECTS include/sc/db/db.h)
 set(SOURCE_LIBRARIES)
 set(SOURCE_LINK_LIBRARIES)
 
-add_sc_object(pgsql LINK_LIBRARIES PostgreSQL::PostgreSQL PUBLIC_LINK_LIBRARIES sc::sc-core PostgreSQL::PostgreSQL)
+add_sc_object(db LINK_LIBRARIES PostgreSQL::PostgreSQL PUBLIC_LINK_LIBRARIES sc::sc-core PostgreSQL::PostgreSQL)
 
 ######################
 # Exported Libraries #

@@ -8,7 +8,7 @@
 
 #include <sc/core/sc.h>
 
-#include <sc/db/pgsql.h>
+#include <sc/db/db.h>
 
 int main() {
     try {
@@ -22,8 +22,8 @@ int main() {
 
         // [readme]
         sc::console::heading("Connecting");
-        const sc::postgres db; // host, database, user and password from PGHOST etc.
-        sc::console::show_text("const sc::postgres db;", "connected in " + std::string(sw));
+        const sc::db::client db; // host, database, user and password from PGHOST etc.
+        sc::console::show_text("const sc::db::client db;", "connected in " + std::string(sw));
 
         sc::console::heading("A query with a parameter ($1 is passed separately, never pasted into the SQL)");
         const std::string query = "select current_database() as database, current_user as user, "

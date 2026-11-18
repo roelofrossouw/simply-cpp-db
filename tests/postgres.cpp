@@ -1,5 +1,5 @@
 #include <sc/core/core.h>
-#include <sc/db/pgsql.h>
+#include <sc/db/db.h>
 
 #include <chrono>
 #include <cstdlib>
@@ -43,10 +43,10 @@ int main() {
     SECTION("A connection moves but doesn't copy");
     {
         // A copy would share one libpq connection and free it twice.
-        static_assert(!std::is_copy_constructible_v<sc::postgres>);
-        static_assert(!std::is_copy_assignable_v<sc::postgres>);
-        static_assert(std::is_nothrow_move_constructible_v<sc::postgres>);
-        static_assert(std::is_nothrow_move_assignable_v<sc::postgres>);
+        static_assert(!std::is_copy_constructible_v<sc::db::client>);
+        static_assert(!std::is_copy_assignable_v<sc::db::client>);
+        static_assert(std::is_nothrow_move_constructible_v<sc::db::client>);
+        static_assert(std::is_nothrow_move_assignable_v<sc::db::client>);
         CHECK(true);
     }
 
@@ -54,31 +54,31 @@ int main() {
     {
         // No server on this host, or a server without that database: either way the
         // constructor has to throw rather than hand back an unusable object.
-        CHECK_THROWS_AS((sc::postgres{"127.0.0.1", "sc_db_test_no_such_database", "no_such_user", "no_such_password"}),
+        CHECK_THROWS_AS((sc::db::client{"127.0.0.1", "sc_db_test_no_such_database", "no_such_user", "no_such_password"}),
                         runtime_error);
-        CHECK_THROWS_AS((sc::postgres{"no-such-host.invalid", "postgres", "postgres"}), runtime_error);
+        CHECK_THROWS_AS((sc::db::client{"no-such-host.invalid", "postgres", "postgres"}), runtime_error);
 
         // The failure carries the driver's message rather than an empty string.
         try {
-            const sc::postgres unreachable{"no-such-host.invalid", "postgres", "postgres"};
+            const sc::db::client unreachable{"no-such-host.invalid", "postgres", "postgres"};
             CHECK_MSG(false, "expected a connection failure");
         } catch (const runtime_error &error) {
             CHECK(!string{error.what()}.empty());
         }
 
         // The same through a server list.
-        CHECK_THROWS_AS((sc::postgres{{{"no-such-host.invalid", 5432}, {"also-no-such-host.invalid", 0}},
+        CHECK_THROWS_AS((sc::db::client{{{"no-such-host.invalid", 5432}, {"also-no-such-host.invalid", 0}},
                                       "postgres", "postgres"}), runtime_error);
     }
 
     SECTION("Further libpq keywords");
     {
         // Passed on to libpq: an unknown one is libpq's error, a malformed one ours.
-        CHECK_THROWS_AS((sc::postgres{"127.0.0.1", "postgres", "postgres", {}, {{"no_such_keyword", "1"}}}), runtime_error);
-        CHECK_THROWS_AS((sc::postgres{"127.0.0.1", "postgres", "postgres", {}, {{"connect_timeout=1 host", "x"}}}), invalid_argument);
+        CHECK_THROWS_AS((sc::db::client{"127.0.0.1", "postgres", "postgres", {}, {{"no_such_keyword", "1"}}}), runtime_error);
+        CHECK_THROWS_AS((sc::db::client{"127.0.0.1", "postgres", "postgres", {}, {{"connect_timeout=1 host", "x"}}}), invalid_argument);
         // A limit on connecting: an address nothing answers on gives up within it.
         const auto started = std::chrono::steady_clock::now();
-        CHECK_THROWS_AS((sc::postgres{"10.255.255.1", "postgres", "postgres", {}, {{"connect_timeout", "2"}}}), runtime_error);
+        CHECK_THROWS_AS((sc::db::client{"10.255.255.1", "postgres", "postgres", {}, {{"connect_timeout", "2"}}}), runtime_error);
         CHECK(std::chrono::steady_clock::now() - started < std::chrono::seconds{10});
     }
 
@@ -93,7 +93,7 @@ int main() {
 
         bool reachable = true;
         try {
-            const sc::postgres probe{host, name, user, password};
+            const sc::db::client probe{host, name, user, password};
         } catch (const runtime_error &) {
             reachable = false;
         }
@@ -103,8 +103,8 @@ int main() {
                  << ", live checks not run - set PGHOST, PGDATABASE, PGUSER and PGPASSWORD to redirect)" << endl;
         } else {
             // Moved, the connection keeps working; the moved-from object refuses to be used.
-            sc::postgres first{host, name, user, password};
-            sc::postgres moved{std::move(first)};
+            sc::db::client first{host, name, user, password};
+            sc::db::client moved{std::move(first)};
             const auto two = moved.exec("select 2 as two");
             CHECK_EQ(two.at(0).at("two"), string{"2"});
             CHECK_THROWS_AS(first.exec("select 1"), logic_error);
@@ -112,7 +112,7 @@ int main() {
             const auto three = first.exec("select 3 as three");
             CHECK_EQ(three.at(0).at("three"), string{"3"});
 
-            const sc::postgres db{host, name, user, password};
+            const sc::db::client db{host, name, user, password};
 
             // A single row, addressed by column alias.
             const auto one = db.exec("select 1 as one");
@@ -176,7 +176,7 @@ int main() {
             CHECK_EQ(after.size(), size_t{1});
 
             // A server list fails over past a server that can't be reached.
-            const sc::postgres failover{{{"no-such-host.invalid", 5432}, {host, 0}}, name, user, password};
+            const sc::db::client failover{{{"no-such-host.invalid", 5432}, {host, 0}}, name, user, password};
             const auto via_list = failover.exec("select 1 as one");
             CHECK_EQ(via_list.size(), size_t{1});
 
@@ -184,7 +184,7 @@ int main() {
             {
                 const pg_environment environment{{{"PGHOST", host}, {"PGDATABASE", name}, {"PGUSER", user}}};
                 const auto who = "select current_database() as db, current_user as usr";
-                const sc::postgres from_environment;
+                const sc::db::client from_environment;
                 const auto all = from_environment.exec(who);
                 CHECK_EQ(all.size(), size_t{1});
                 if (all.size() == 1) {
@@ -192,23 +192,23 @@ int main() {
                     CHECK_EQ(all[0].at("usr"), user);
                 }
                 // A server given, database and user still from the environment.
-                const sc::postgres server_only{host};
+                const sc::db::client server_only{host};
                 CHECK_EQ(server_only.exec(who).size(), size_t{1});
             }
             {
                 // An explicit value wins over the environment.
                 const pg_environment environment{{{"PGDATABASE", "sc_db_test_no_such_database"}}};
-                const sc::postgres explicit_db{host, name, user, password};
+                const sc::db::client explicit_db{host, name, user, password};
                 const auto current = explicit_db.exec("select current_database() as db");
                 CHECK_EQ(current.size(), size_t{1});
                 if (current.size() == 1) CHECK_EQ(current[0].at("db"), name);
-                CHECK_THROWS_AS((sc::postgres{host, "", user, password}), runtime_error);
+                CHECK_THROWS_AS((sc::db::client{host, "", user, password}), runtime_error);
             }
 
             // LISTEN on one connection, NOTIFY from another: the notification arrives, then none.
             {
-                const sc::postgres listener{host, name, user, password};
-                const sc::postgres sender{host, name, user, password};
+                const sc::db::client listener{host, name, user, password};
+                const sc::db::client sender{host, name, user, password};
                 listener.exec("listen sc_db_test_channel");
                 CHECK(!listener.wait_notification(chrono::milliseconds{50}));
                 sender.exec("select pg_notify('sc_db_test_channel', 'hello')");
@@ -235,7 +235,7 @@ int main() {
             }
 
             // The same as one ';'-separated string.
-            const sc::postgres from_string{"no-such-host.invalid;" + host, name, user, password};
+            const sc::db::client from_string{"no-such-host.invalid;" + host, name, user, password};
             CHECK_EQ(from_string.exec("select 1 as one").size(), size_t{1});
         }
     }

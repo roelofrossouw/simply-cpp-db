@@ -37,15 +37,15 @@ add_executable(myapp main.cpp)
 target_link_libraries(myapp PRIVATE sc::sc-db)
 ```
 
-The header is `pgsql.h`. Before 1.2.0 it was `postgres.h`, the name of one of
-PostgreSQL's own headers, which could be found instead of it.
+The header is `<sc/db/db.h>`, and the class `sc::db::client` (`pgsql.h` and `sc::postgres` until
+3.0.0; before 1.2.0 the header was `postgres.h`, the name of one of PostgreSQL's own headers).
 
 ```cpp
-#include <sc/db/pgsql.h>
+#include <sc/db/db.h>
 #include <iostream>
 
 int main() {
-    sc::postgres db("host", "dbname", "user");
+    sc::db::client db("host", "dbname", "user");
     auto table = db.exec("select id, name from person limit 10");
     for (const auto &row : table) {
         for (const auto &[field, value] : row) {
@@ -58,7 +58,7 @@ int main() {
 
 Every argument is optional. Anything left empty is up to libpq's own defaults,
 so the standard `PGHOST`, `PGPORT`, `PGDATABASE`, `PGUSER` and `PGPASSWORD`
-variables (and `~/.pgpass`) apply, and `sc::postgres db;` connects purely from
+variables (and `~/.pgpass`) apply, and `sc::db::client db;` connects purely from
 them. Explicit arguments win over the environment.
 
 The first argument is an `sc::ip_endpoints`, so it can be a `host[:port]`
@@ -67,15 +67,15 @@ list. With several servers libpq connects to the first one that answers; a
 server without a port uses the default port:
 
 ```cpp
-sc::postgres db("db1;db2:5433", "dbname", "user", "password");
-sc::postgres listed({{"db1", 5432}, {"db2", 5433}}, "dbname", "user", "password");
+sc::db::client db("db1;db2:5433", "dbname", "user", "password");
+sc::db::client listed({{"db1", 5432}, {"db2", 5433}}, "dbname", "user", "password");
 ```
 
 Further libpq keywords go in a fifth argument, such as a limit on connecting or
 the TLS mode:
 
 ```cpp
-sc::postgres quick("db1", "dbname", "user", {}, {{"connect_timeout", "3"}, {"sslmode", "require"}});
+sc::db::client quick("db1", "dbname", "user", {}, {{"connect_timeout", "3"}, {"sslmode", "require"}});
 ```
 
 A connection that LISTENs waits for NOTIFY with `wait_notification()`: the next
@@ -116,8 +116,8 @@ configure time, so it always matches code that compiles:
 <!-- sc-example: examples/sc-db-demo.cpp -->
 ```cpp
 sc::console::heading("Connecting");
-const sc::postgres db; // host, database, user and password from PGHOST etc.
-sc::console::show_text("const sc::postgres db;", "connected in " + std::string(sw));
+const sc::db::client db; // host, database, user and password from PGHOST etc.
+sc::console::show_text("const sc::db::client db;", "connected in " + std::string(sw));
 
 sc::console::heading("A query with a parameter ($1 is passed separately, never pasted into the SQL)");
 const std::string query = "select current_database() as database, current_user as user, "
